@@ -50,20 +50,22 @@ A lightweight, hardware-independent, **100% transparent live lyrics overlay** fo
 - **Python**: Python 3.10+ installed and added to `PATH`
 - **Supported Players**: Spotify, YouTube (via Edge/Chrome/Firefox), Apple Music, Windows Media Player, or any app supporting Windows Media Transport Controls.
 
-### 1. Clone & Install Dependencies
+### 1. Clone & Setup
 
 ```powershell
 git clone https://github.com/ScotsGamez/transparent-lyrics-overlay.git
 cd transparent-lyrics-overlay
-pip install -r requirements.txt
 ```
 
-### 2. Launch the Overlay
+Double-click **`setup.bat`**:
+- Installs all dependencies (`pip install -r requirements.txt`).
+- Automatically creates a sleek **Transparent Live Lyrics** shortcut directly on your Windows Desktop!
 
-You can launch the overlay in one of two ways:
+### 2. Launching
 
-- **Double-click** `Launch_Transparent_Lyrics.bat` (runs silently in the background with no command prompt window).
-- Or run manually via Python:
+- **From Desktop**: Double-click the **Transparent Live Lyrics** desktop shortcut.
+- **From Folder**: Double-click `Launch_Transparent_Lyrics.bat` (runs silently with zero command prompt box).
+- **Via Terminal**:
   ```powershell
   python run.py
   ```

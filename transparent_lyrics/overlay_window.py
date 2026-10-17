@@ -306,7 +306,20 @@ class OverlayWindow(QWidget):
             theme_menu.addAction(act)
 
         menu.addSeparator()
+        shortcut_act = menu.addAction("🔗 Create Desktop Shortcut")
+        shortcut_act.triggered.connect(self._create_desktop_shortcut)
+
+        menu.addSeparator()
         exit_act = menu.addAction("✕ Exit")
         exit_act.triggered.connect(QGuiApplication.quit)
 
         menu.exec(event.globalPos())
+
+    def _create_desktop_shortcut(self):
+        import subprocess
+        from pathlib import Path
+        script = Path(__file__).resolve().parent.parent / "scripts" / "create_shortcut.ps1"
+        try:
+            subprocess.run(["powershell.exe", "-ExecutionPolicy", "Bypass", "-NoProfile", "-File", str(script)], check=True)
+        except Exception as e:
+            print(f"[OverlayWindow] Error creating shortcut: {e}")

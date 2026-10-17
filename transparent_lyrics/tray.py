@@ -155,10 +155,24 @@ class LyricsTrayIcon(QSystemTrayIcon):
             self.theme_menu.addAction(act)
 
         self.menu.addSeparator()
+        shortcut_act = self.menu.addAction("🔗 Create Desktop Shortcut")
+        shortcut_act.triggered.connect(self._create_desktop_shortcut)
+
+        self.menu.addSeparator()
         exit_action = self.menu.addAction("✕ Exit")
         exit_action.triggered.connect(QGuiApplication.quit)
 
         self.setContextMenu(self.menu)
+
+    def _create_desktop_shortcut(self):
+        import subprocess
+        from pathlib import Path
+        script = Path(__file__).resolve().parent.parent / "scripts" / "create_shortcut.ps1"
+        try:
+            subprocess.run(["powershell.exe", "-ExecutionPolicy", "Bypass", "-NoProfile", "-File", str(script)], check=True)
+            self.showMessage("Transparent Live Lyrics", "Desktop shortcut created successfully!", QSystemTrayIcon.Information, 3000)
+        except Exception as e:
+            print(f"[Tray] Error creating shortcut: {e}")
 
     def _toggle_lock(self, checked: bool):
         self.window.set_locked(checked)
