@@ -42,4 +42,6 @@ Desktop.ini
 
 # User configs
 config.json
+settings.json
+settings.yaml
 *.log

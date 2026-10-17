@@ -246,6 +246,14 @@ class OverlayWindow(QWidget):
         if ok:
             self.set_sync_offset(val)
 
+    def reload_settings(self):
+        self.config.load()
+        self.restore_geometry()
+        self.apply_theme(self.config.get("theme", "Minimalist"))
+        self.set_album_cover_mode(self.config.get("album_cover_mode", "off"), adjust_ratio=False)
+        self.set_locked(self.config.get("is_locked", False))
+        self.sync_offset_changed.emit(float(self.config.get("sync_offset", 0.0)))
+
     def contextMenuEvent(self, event):
         if self.is_locked:
             return
@@ -340,6 +348,14 @@ class OverlayWindow(QWidget):
         offset_menu.addSeparator()
         custom_off_act = offset_menu.addAction("Custom Offset...")
         custom_off_act.triggered.connect(self.prompt_custom_offset)
+
+        # 5. Settings Submenu
+        settings_menu = menu.addMenu("⚙ Settings")
+        settings_menu.addAction("📄 Edit settings.yaml...", lambda: self.config.open_in_editor("yaml"))
+        settings_menu.addAction("📄 Edit settings.json...", lambda: self.config.open_in_editor("json"))
+        settings_menu.addAction("📁 Open Settings Folder...", self.config.open_folder)
+        settings_menu.addSeparator()
+        settings_menu.addAction("🔄 Reload Settings from File", self.reload_settings)
 
         menu.addSeparator()
         shortcut_act = menu.addAction("🔗 Create Desktop Shortcut")

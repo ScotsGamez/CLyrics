@@ -178,6 +178,16 @@ class LyricsTrayIcon(QSystemTrayIcon):
         custom_off_act.triggered.connect(self.window.prompt_custom_offset)
 
         self.menu.addSeparator()
+
+        # 5. Settings Submenu
+        self.settings_menu = self.menu.addMenu("⚙ Settings")
+        self.settings_menu.addAction("📄 Edit settings.yaml...", lambda: self.window.config.open_in_editor("yaml"))
+        self.settings_menu.addAction("📄 Edit settings.json...", lambda: self.window.config.open_in_editor("json"))
+        self.settings_menu.addAction("📁 Open Settings Folder...", self.window.config.open_folder)
+        self.settings_menu.addSeparator()
+        self.settings_menu.addAction("🔄 Reload Settings from File", self.window.reload_settings)
+
+        self.menu.addSeparator()
         shortcut_act = self.menu.addAction("🔗 Create Desktop Shortcut")
         shortcut_act.triggered.connect(self._create_desktop_shortcut)
 

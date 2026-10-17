@@ -88,6 +88,8 @@ Double-click **`setup.bat`**:
 | **Center on Screen** | Right-click > **Center on Screen**. |
 | **Sync Offset** | Right-click lyrics or System Tray Icon > **Sync Offset** > select **±0.5s**, **±1.0s**, or custom offset. |
 | **Change Theme** | Right-click > **Themes** > select your preferred palette. |
+| **Edit Settings (YAML/JSON)** | Right-click > **Settings** > select **Edit settings.yaml...** or **Edit settings.json...** |
+| **Reload Settings** | Right-click > **Settings** > select **Reload Settings from File**. |
 | **Exit** | Right-click lyrics or System Tray Icon > **Exit**. |
 
 ---
