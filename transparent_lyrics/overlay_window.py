@@ -49,6 +49,7 @@ class OverlayWindow(QWidget):
     theme_changed = Signal(str)
     size_changed = Signal(int, int)
     album_mode_changed = Signal(str)
+    sync_offset_changed = Signal(float)
 
     def __init__(self, config_manager: ConfigManager, parent=None):
         super().__init__(parent)
@@ -117,12 +118,10 @@ class OverlayWindow(QWidget):
 
         # Keep ratio wider when album art is enabled to prevent text crunching
         if adjust_ratio:
-            if mode in ("left", "right") and prev_mode == "off":
-                if self.width() < 1200:
-                    self.set_window_dimensions(max(1200, self.width() + 240), self.height())
-            elif mode == "off" and prev_mode in ("left", "right"):
-                if self.width() >= 1200:
-                    self.set_window_dimensions(max(960, self.width() - 240), self.height())
+            if mode in ("left", "right") and self.width() < 1200:
+                self.set_window_dimensions(max(1200, self.width() + 240), self.height())
+            elif mode == "off" and prev_mode in ("left", "right") and self.width() >= 1200:
+                self.set_window_dimensions(max(960, self.width() - 240), self.height())
 
         self.album_mode_changed.emit(mode)
 
@@ -232,6 +231,21 @@ class OverlayWindow(QWidget):
             except Exception:
                 pass
 
+    def set_sync_offset(self, offset: float):
+        self.config.set("sync_offset", round(offset, 2))
+        self.sync_offset_changed.emit(offset)
+
+    def prompt_custom_offset(self):
+        val, ok = QInputDialog.getDouble(
+            self,
+            "Custom Sync Offset",
+            "Enter offset in seconds (e.g. +1.5 to show lyrics earlier, -1.5 for later):",
+            value=float(self.config.get("sync_offset", 0.0)),
+            decimals=2
+        )
+        if ok:
+            self.set_sync_offset(val)
+
     def contextMenuEvent(self, event):
         if self.is_locked:
             return
@@ -302,8 +316,30 @@ class OverlayWindow(QWidget):
             act = QAction(name, theme_menu, checkable=True)
             act.setChecked(name == current_theme)
             act.triggered.connect(lambda checked, n=name: self.apply_theme(n))
-            theme_group.addAction(act)
-            theme_menu.addAction(act)
+        # 4. Sync Offset Submenu
+        offset_menu = menu.addMenu("⏱ Sync Offset")
+        offset_group = QActionGroup(offset_menu)
+        curr_offset = float(self.config.get("sync_offset", 0.0))
+
+        OFFSET_PRESETS = [
+            ("No Offset (0.0s)", 0.0),
+            ("+0.5s Earlier", 0.5),
+            ("+1.0s Earlier", 1.0),
+            ("+2.0s Earlier", 2.0),
+            ("-0.5s Later", -0.5),
+            ("-1.0s Later", -1.0),
+            ("-2.0s Later", -2.0),
+        ]
+        for label, val in OFFSET_PRESETS:
+            act = QAction(label, offset_menu, checkable=True)
+            act.setChecked(abs(curr_offset - val) < 0.01)
+            act.triggered.connect(lambda checked, v=val: self.set_sync_offset(v))
+            offset_group.addAction(act)
+            offset_menu.addAction(act)
+
+        offset_menu.addSeparator()
+        custom_off_act = offset_menu.addAction("Custom Offset...")
+        custom_off_act.triggered.connect(self.prompt_custom_offset)
 
         menu.addSeparator()
         shortcut_act = menu.addAction("🔗 Create Desktop Shortcut")

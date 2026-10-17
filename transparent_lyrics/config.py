@@ -13,6 +13,7 @@ DEFAULT_CONFIG = {
     "active_font_size": 22,
     "context_font_size": 15,
     "album_cover_mode": "off",  # "off", "left", "right"
+    "sync_offset": 0.0,         # In seconds (e.g. +0.5 or -0.5)
 }
 
 CONFIG_DIR = Path(os.environ.get("APPDATA", ".")) / "TransparentLyrics"

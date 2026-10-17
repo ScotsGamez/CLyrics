@@ -21,6 +21,8 @@ A lightweight, hardware-independent, **100% transparent live lyrics overlay** fo
   - Toggle live album artwork directly on the left or right of the floating lyrics.
   - Automatically widens window aspect ratio to guarantee spacious, uncompressed typography.
   - Smooth rounded corners and graceful cross-fades when changing tracks.
+- **100% Local Hardware-Based Timing (Zero Internet/Clock Reliance)**: Eliminates all wall-clock and internet-time math. Uses hardware CPU performance timers (`QueryPerformanceCounter`) to stay in exact lockstep with your physical device's audio output regardless of system clock drift or time zone errors.
+- **Manual Sync Offset Controls**: Fine-tune lyric timing on the fly from the System Tray or context menu (**±0.5s**, **±1.0s**, **±2.0s**, or custom second offsets).
 - **Window Resizing & Presets**:
   - Resize directly from the System Tray or right-click menu (**Compact**, **Standard**, **Large**, **Wide**, **Ultra-Wide**, or **Custom Dimensions**).
   - Drag-to-resize by grabbing the bottom-right corner when unlocked.
@@ -84,6 +86,7 @@ Double-click **`setup.bat`**:
 | **Lock Click-Through** | Right-click lyrics > **Lock (Click-Through)**, or right-click the taskbar tray icon > **Lock**. |
 | **Unlock / Reposition** | Right-click the **System Tray Icon** in your Windows taskbar notification area > uncheck **Lock**. |
 | **Center on Screen** | Right-click > **Center on Screen**. |
+| **Sync Offset** | Right-click lyrics or System Tray Icon > **Sync Offset** > select **±0.5s**, **±1.0s**, or custom offset. |
 | **Change Theme** | Right-click > **Themes** > select your preferred palette. |
 | **Exit** | Right-click lyrics or System Tray Icon > **Exit**. |
 

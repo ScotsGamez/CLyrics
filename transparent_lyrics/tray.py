@@ -60,6 +60,7 @@ class LyricsTrayIcon(QSystemTrayIcon):
         self.window.theme_changed.connect(self._on_theme_changed)
         self.window.album_mode_changed.connect(self._on_album_mode_changed)
         self.window.size_changed.connect(self._on_size_changed)
+        self.window.sync_offset_changed.connect(self._on_sync_offset_changed)
 
     def _init_menu(self):
         self.menu = QMenu()
@@ -151,8 +152,30 @@ class LyricsTrayIcon(QSystemTrayIcon):
             act = QAction(name, self.theme_menu, checkable=True)
             act.setChecked(name == current_theme)
             act.triggered.connect(lambda checked, n=name: self.window.apply_theme(n))
-            self.theme_group.addAction(act)
-            self.theme_menu.addAction(act)
+        # 4. Sync Offset Submenu
+        self.offset_menu = self.menu.addMenu("⏱ Sync Offset")
+        self.offset_group = QActionGroup(self.offset_menu)
+        curr_offset = float(self.window.config.get("sync_offset", 0.0))
+
+        OFFSET_PRESETS = [
+            ("No Offset (0.0s)", 0.0),
+            ("+0.5s Earlier", 0.5),
+            ("+1.0s Earlier", 1.0),
+            ("+2.0s Earlier", 2.0),
+            ("-0.5s Later", -0.5),
+            ("-1.0s Later", -1.0),
+            ("-2.0s Later", -2.0),
+        ]
+        for label, val in OFFSET_PRESETS:
+            act = QAction(label, self.offset_menu, checkable=True)
+            act.setChecked(abs(curr_offset - val) < 0.01)
+            act.triggered.connect(lambda checked, v=val: self.window.set_sync_offset(v))
+            self.offset_group.addAction(act)
+            self.offset_menu.addAction(act)
+
+        self.offset_menu.addSeparator()
+        custom_off_act = self.offset_menu.addAction("Custom Offset...")
+        custom_off_act.triggered.connect(self.window.prompt_custom_offset)
 
         self.menu.addSeparator()
         shortcut_act = self.menu.addAction("🔗 Create Desktop Shortcut")
@@ -196,6 +219,11 @@ class LyricsTrayIcon(QSystemTrayIcon):
             # Check if text matches preset dimensions
             dim_str = f"{width} × {height}"
             act.setChecked(dim_str in act.text())
+
+    def _on_sync_offset_changed(self, offset: float):
+        for act in self.offset_group.actions():
+            dim = f"({offset:+.1f}s)" if offset != 0.0 else "(0.0s)"
+            act.setChecked(dim in act.text())
 
     def _toggle_visibility(self, visible: bool):
         if visible:

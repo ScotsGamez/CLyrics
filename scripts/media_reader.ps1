@@ -1,5 +1,6 @@
 # media_reader.ps1
 # Emits real-time JSON events for currently playing Windows media via GSMTC
+# Uses pure local hardware CPU timers (System.Diagnostics.Stopwatch) with ZERO reliance on wall-clock / internet time
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 
 [Windows.Media.Control.GlobalSystemMediaTransportControlsSessionManager, Windows.Media, ContentType = WindowsRuntime] | Out-Null
@@ -21,6 +22,12 @@ function Await($WinRtTask, $ResultType) {
 
 $mgr = Await ([Windows.Media.Control.GlobalSystemMediaTransportControlsSessionManager]::RequestAsync()) $MgrType
 
+# Local hardware stopwatch for continuous playback progression (QueryPerformanceCounter)
+$sw = [System.Diagnostics.Stopwatch]::new()
+[double]$lastReportedPos = -1.0
+[double]$basePos = 0.0
+$lastTrackId = ""
+
 while ($true) {
     try {
         $session = $mgr.GetCurrentSession()
@@ -28,18 +35,38 @@ while ($true) {
             $media = Await ($session.TryGetMediaPropertiesAsync()) $PropType
             $info = $session.GetPlaybackInfo()
             $tl = $session.GetTimelineProperties()
-            $pos = 0.0
-            if ($tl) {
-                $pos = $tl.Position.TotalSeconds
-                if ($info.PlaybackStatus -eq 'Playing' -and $tl.LastUpdatedTime) {
-                    $elapsed = ([DateTimeOffset]::UtcNow - $tl.LastUpdatedTime.ToUniversalTime()).TotalSeconds
-                    if ($elapsed -gt 0 -and $elapsed -lt 30) { $pos += $elapsed }
-                }
-            }
-            $dur = if ($tl) { $tl.EndTime.TotalSeconds } else { 0.0 }
+
             $title = if ($media.Title) { $media.Title } else { "" }
             $artist = if ($media.Artist) { $media.Artist } else { "" }
             $playing = ($info.PlaybackStatus -eq 'Playing')
+            $dur = if ($tl) { [double]$tl.EndTime.TotalSeconds } else { 0.0 }
+            [double]$rawPos = if ($tl) { [double]$tl.Position.TotalSeconds } else { 0.0 }
+
+            $currentTrackId = "$title - $artist"
+            if ($currentTrackId -ne $lastTrackId) {
+                $lastTrackId = $currentTrackId
+                $lastReportedPos = -1.0
+                $basePos = $rawPos
+                $sw.Reset()
+                if ($playing) { $sw.Start() }
+            }
+
+            # Device timeline packet update or user seek detection
+            if ([Math]::Abs($rawPos - $lastReportedPos) -gt 0.05) {
+                $lastReportedPos = $rawPos
+                $basePos = $rawPos
+                $sw.Restart()
+            }
+
+            # Local hardware position calculation without any wall-clock or UTC math
+            [double]$pos = $basePos
+            if ($playing) {
+                if (-not $sw.IsRunning) { $sw.Start() }
+                $pos += $sw.Elapsed.TotalSeconds
+                if ($dur -gt 0 -and $pos -gt $dur) { $pos = $dur }
+            } else {
+                if ($sw.IsRunning) { $sw.Stop() }
+            }
             
             $json = [PSCustomObject]@{
                 title = $title
@@ -50,6 +77,8 @@ while ($true) {
             } | ConvertTo-Json -Compress
             [Console]::Out.WriteLine($json)
         } else {
+            $sw.Reset()
+            $lastReportedPos = -1.0
             [Console]::Out.WriteLine('{"title":"","artist":"","playing":false,"pos":0,"duration":0}')
         }
     } catch {

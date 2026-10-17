@@ -54,7 +54,13 @@ class TestIntegration(unittest.TestCase):
         self.assertEqual(controller.window.width(), 1000)
         self.assertEqual(controller.window.height(), 240)
 
-        # 7. Clean Shutdown
+        # 7. Test Sync Offset
+        controller.window.set_sync_offset(1.5)
+        self.assertEqual(controller.config.get("sync_offset"), 1.5)
+        controller.window.set_sync_offset(0.0)
+        self.assertEqual(controller.config.get("sync_offset"), 0.0)
+
+        # 8. Clean Shutdown
         controller.shutdown()
 
 

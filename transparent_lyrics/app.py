@@ -177,7 +177,8 @@ class TransparentLyricsApp(QObject):
         if not self.last_title:
             return
 
-        current_pos = self.time_tracker.get_current_pos()
+        offset = float(self.config.get("sync_offset", 0.0))
+        current_pos = max(0.0, self.time_tracker.get_current_pos() + offset)
         lyrics = self.lyrics_service.get_lyrics(self.last_title, self.last_artist)
 
         state, lyrics_list, active_index, special_label = self.lyrics_service.match_lyrics(
