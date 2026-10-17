@@ -2,6 +2,7 @@ from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QIcon, QPixmap, QPainter, QColor, QFont, QAction, QActionGroup, QGuiApplication
 from PySide6.QtWidgets import QSystemTrayIcon, QMenu
 from .themes import THEMES
+from .overlay_window import SIZE_PRESETS
 
 
 def create_tray_icon() -> QIcon:
@@ -45,7 +46,7 @@ def create_tray_icon() -> QIcon:
 
 
 class LyricsTrayIcon(QSystemTrayIcon):
-    """System Tray Icon providing background window control and lock state management."""
+    """System Tray Icon providing background window control, resizing, and album art management."""
 
     def __init__(self, overlay_window, parent=None):
         super().__init__(create_tray_icon(), parent)
@@ -57,6 +58,8 @@ class LyricsTrayIcon(QSystemTrayIcon):
         # Connect overlay state signals
         self.window.lock_changed.connect(self._on_lock_changed)
         self.window.theme_changed.connect(self._on_theme_changed)
+        self.window.album_mode_changed.connect(self._on_album_mode_changed)
+        self.window.size_changed.connect(self._on_size_changed)
 
     def _init_menu(self):
         self.menu = QMenu()
@@ -110,7 +113,36 @@ class LyricsTrayIcon(QSystemTrayIcon):
         self.visibility_action.triggered.connect(self._toggle_visibility)
         self.menu.addAction(self.visibility_action)
 
-        # Themes Submenu
+        self.menu.addSeparator()
+
+        # 1. Album Cover Submenu
+        self.album_menu = self.menu.addMenu("🖼 Album Cover")
+        self.album_group = QActionGroup(self.album_menu)
+        curr_album_mode = self.window.config.get("album_cover_mode", "off")
+
+        for mode_id, mode_label in [("off", "Off / Hidden"), ("left", "Left Side"), ("right", "Right Side")]:
+            act = QAction(mode_label, self.album_menu, checkable=True)
+            act.setChecked(curr_album_mode == mode_id)
+            act.triggered.connect(lambda checked, m=mode_id: self.window.set_album_cover_mode(m))
+            self.album_group.addAction(act)
+            self.album_menu.addAction(act)
+
+        # 2. Window Size Submenu
+        self.size_menu = self.menu.addMenu("📏 Window Size")
+        self.size_group = QActionGroup(self.size_menu)
+
+        for label, w, h in SIZE_PRESETS:
+            act = QAction(label, self.size_menu, checkable=True)
+            act.setChecked(self.window.width() == w and self.window.height() == h)
+            act.triggered.connect(lambda checked, w=w, h=h: self.window.set_window_dimensions(w, h))
+            self.size_group.addAction(act)
+            self.size_menu.addAction(act)
+
+        self.size_menu.addSeparator()
+        custom_act = self.size_menu.addAction("Custom Dimensions...")
+        custom_act.triggered.connect(self.window.prompt_custom_size)
+
+        # 3. Themes Submenu
         self.theme_menu = self.menu.addMenu("🎨 Themes")
         self.theme_group = QActionGroup(self.theme_menu)
         current_theme = self.window.config.get("theme", "Minimalist")
@@ -138,6 +170,18 @@ class LyricsTrayIcon(QSystemTrayIcon):
     def _on_theme_changed(self, theme_name: str):
         for act in self.theme_group.actions():
             act.setChecked(act.text() == theme_name)
+
+    def _on_album_mode_changed(self, mode: str):
+        mode_labels = {"off": "Off / Hidden", "left": "Left Side", "right": "Right Side"}
+        target_label = mode_labels.get(mode, "Off / Hidden")
+        for act in self.album_group.actions():
+            act.setChecked(act.text() == target_label)
+
+    def _on_size_changed(self, width: int, height: int):
+        for act in self.size_group.actions():
+            # Check if text matches preset dimensions
+            dim_str = f"{width} × {height}"
+            act.setChecked(dim_str in act.text())
 
     def _toggle_visibility(self, visible: bool):
         if visible:

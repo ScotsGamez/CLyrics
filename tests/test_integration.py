@@ -38,7 +38,23 @@ class TestIntegration(unittest.TestCase):
         controller.window.set_locked(False)
         self.assertFalse(controller.window.is_locked)
 
-        # 5. Clean Shutdown
+        # 5. Test Album Cover Modes & Auto-Widening
+        controller.window.set_album_cover_mode("left", adjust_ratio=True)
+        self.assertEqual(controller.window.renderer.album_cover_mode, "left")
+        self.assertGreaterEqual(controller.window.width(), 1200)
+
+        controller.window.set_album_cover_mode("right", adjust_ratio=True)
+        self.assertEqual(controller.window.renderer.album_cover_mode, "right")
+
+        controller.window.set_album_cover_mode("off", adjust_ratio=True)
+        self.assertEqual(controller.window.renderer.album_cover_mode, "off")
+
+        # 6. Test Window Sizing
+        controller.window.set_window_dimensions(1000, 240)
+        self.assertEqual(controller.window.width(), 1000)
+        self.assertEqual(controller.window.height(), 240)
+
+        # 7. Clean Shutdown
         controller.shutdown()
 
 

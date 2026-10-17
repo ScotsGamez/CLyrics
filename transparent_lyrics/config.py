@@ -12,6 +12,7 @@ DEFAULT_CONFIG = {
     "font_family": "Segoe UI",
     "active_font_size": 22,
     "context_font_size": 15,
+    "album_cover_mode": "off",  # "off", "left", "right"
 }
 
 CONFIG_DIR = Path(os.environ.get("APPDATA", ".")) / "TransparentLyrics"

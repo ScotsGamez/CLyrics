@@ -5,7 +5,7 @@ from typing import Optional
 
 from PySide6.QtCore import Qt, QPoint, Signal, QRect
 from PySide6.QtGui import QAction, QActionGroup, QGuiApplication, QCursor
-from PySide6.QtWidgets import QWidget, QVBoxLayout, QMenu
+from PySide6.QtWidgets import QWidget, QVBoxLayout, QMenu, QInputDialog
 
 from .renderer import LyricsRenderer
 from .config import ConfigManager
@@ -14,6 +14,14 @@ from .themes import THEMES, get_theme
 GWL_EXSTYLE = -20
 WS_EX_TRANSPARENT = 0x00000020
 WS_EX_LAYERED = 0x00080000
+
+SIZE_PRESETS = [
+    ("Compact (800 × 200)", 800, 200),
+    ("Standard (960 × 220)", 960, 220),
+    ("Large (1160 × 260)", 1160, 260),
+    ("Wide (1360 × 280)", 1360, 280),
+    ("Ultra-Wide (1560 × 300)", 1560, 300),
+]
 
 
 def _setup_win32_functions():
@@ -35,16 +43,21 @@ GET_WINDOW_LONG, SET_WINDOW_LONG = _setup_win32_functions()
 
 
 class OverlayWindow(QWidget):
-    """100% Transparent, Always-on-Top Floating Lyrics Window with Click-Through Support."""
+    """100% Transparent, Always-on-Top Floating Lyrics Window with Resizing and Album Cover Support."""
 
     lock_changed = Signal(bool)
     theme_changed = Signal(str)
+    size_changed = Signal(int, int)
+    album_mode_changed = Signal(str)
 
     def __init__(self, config_manager: ConfigManager, parent=None):
         super().__init__(parent)
         self.config = config_manager
         self.is_locked = False
         self._drag_pos = QPoint()
+        self._is_resizing = False
+        self._resize_start_geometry = QRect()
+        self._resize_start_mouse = QPoint()
 
         # Frameless, Always on Top, Tool window, Transparent
         self.setWindowFlags(
@@ -54,6 +67,7 @@ class OverlayWindow(QWidget):
             | Qt.Tool
         )
         self.setAttribute(Qt.WA_TranslucentBackground, True)
+        self.setMouseTracking(True)
 
         # Setup child renderer
         self.renderer = LyricsRenderer(self)
@@ -67,6 +81,10 @@ class OverlayWindow(QWidget):
         # Load Theme
         theme_name = self.config.get("theme", "Minimalist")
         self.apply_theme(theme_name)
+
+        # Load Album Cover Mode
+        album_mode = self.config.get("album_cover_mode", "off")
+        self.set_album_cover_mode(album_mode, adjust_ratio=False)
 
         # Apply initial lock state
         init_locked = self.config.get("is_locked", False)
@@ -85,19 +103,44 @@ class OverlayWindow(QWidget):
         else:
             self.center_on_screen()
 
+    def set_window_dimensions(self, width: int, height: int):
+        width = max(500, min(2560, width))
+        height = max(140, min(1440, height))
+        self.resize(width, height)
+        self._save_geometry()
+        self.size_changed.emit(width, height)
+
+    def set_album_cover_mode(self, mode: str, adjust_ratio: bool = True):
+        prev_mode = self.renderer.album_cover_mode
+        self.renderer.set_album_cover_mode(mode)
+        self.config.set("album_cover_mode", mode)
+
+        # Keep ratio wider when album art is enabled to prevent text crunching
+        if adjust_ratio:
+            if mode in ("left", "right") and prev_mode == "off":
+                if self.width() < 1200:
+                    self.set_window_dimensions(max(1200, self.width() + 240), self.height())
+            elif mode == "off" and prev_mode in ("left", "right"):
+                if self.width() >= 1200:
+                    self.set_window_dimensions(max(960, self.width() - 240), self.height())
+
+        self.album_mode_changed.emit(mode)
+
     def center_on_screen(self):
         screen = QGuiApplication.primaryScreen()
         if screen:
             screen_geo = screen.availableGeometry()
             x = (screen_geo.width() - self.width()) // 2
-            y = screen_geo.height() - self.height() - 100  # Default lower-third
+            y = screen_geo.height() - self.height() - 100
             self.move(x, y)
-            self._save_position()
+            self._save_geometry()
 
-    def _save_position(self):
+    def _save_geometry(self):
         pos = self.pos()
         self.config.set("pos_x", pos.x())
         self.config.set("pos_y", pos.y())
+        self.config.set("width", self.width())
+        self.config.set("height", self.height())
 
     def apply_theme(self, theme_name: str):
         theme = get_theme(theme_name)
@@ -123,30 +166,75 @@ class OverlayWindow(QWidget):
         self.setAttribute(Qt.WA_TransparentForMouseEvents, locked)
         self.lock_changed.emit(locked)
 
+    def _is_near_corner(self, pos: QPoint) -> bool:
+        # Check if cursor is within 24px of bottom-right corner
+        return (self.width() - pos.x() <= 24) and (self.height() - pos.y() <= 24)
+
     def mousePressEvent(self, event):
         if not self.is_locked and event.button() == Qt.LeftButton:
-            self._drag_pos = event.globalPosition().toPoint() - self.frameGeometry().topLeft()
+            if self._is_near_corner(event.pos()):
+                self._is_resizing = True
+                self._resize_start_geometry = self.geometry()
+                self._resize_start_mouse = event.globalPosition().toPoint()
+            else:
+                self._is_resizing = False
+                self._drag_pos = event.globalPosition().toPoint() - self.frameGeometry().topLeft()
             event.accept()
         else:
             super().mousePressEvent(event)
 
     def mouseMoveEvent(self, event):
-        if not self.is_locked and event.buttons() == Qt.LeftButton:
-            self.move(event.globalPosition().toPoint() - self._drag_pos)
-            event.accept()
-        else:
-            super().mouseMoveEvent(event)
+        if not self.is_locked:
+            if self._is_resizing:
+                delta = event.globalPosition().toPoint() - self._resize_start_mouse
+                new_w = max(500, self._resize_start_geometry.width() + delta.x())
+                new_h = max(140, self._resize_start_geometry.height() + delta.y())
+                self.resize(new_w, new_h)
+                event.accept()
+                return
+
+            if event.buttons() == Qt.LeftButton:
+                self.move(event.globalPosition().toPoint() - self._drag_pos)
+                event.accept()
+                return
+
+            # Update cursor icon for corner resizing
+            if self._is_near_corner(event.pos()):
+                self.setCursor(Qt.SizeFDiagCursor)
+            else:
+                self.setCursor(Qt.ArrowCursor)
+
+        super().mouseMoveEvent(event)
 
     def mouseReleaseEvent(self, event):
         if not self.is_locked and event.button() == Qt.LeftButton:
-            self._save_position()
+            self._is_resizing = False
+            self._save_geometry()
+            self.setCursor(Qt.ArrowCursor)
             event.accept()
         else:
             super().mouseReleaseEvent(event)
 
+    def prompt_custom_size(self):
+        text, ok = QInputDialog.getText(
+            self,
+            "Custom Window Size",
+            "Enter dimensions (Width × Height, e.g. 1100x240):",
+            text=f"{self.width()}x{self.height()}"
+        )
+        if ok and text:
+            try:
+                parts = text.lower().replace(" ", "").replace("×", "x").split("x")
+                if len(parts) == 2:
+                    w = int(parts[0])
+                    h = int(parts[1])
+                    self.set_window_dimensions(w, h)
+            except Exception:
+                pass
+
     def contextMenuEvent(self, event):
         if self.is_locked:
-            return  # Clicks pass through when locked
+            return
 
         menu = QMenu(self)
         menu.setStyleSheet(
@@ -179,7 +267,33 @@ class OverlayWindow(QWidget):
         center_act = menu.addAction("↺ Center on Screen")
         center_act.triggered.connect(self.center_on_screen)
 
-        # Themes Submenu
+        # 1. Album Cover Submenu
+        album_menu = menu.addMenu("🖼 Album Cover")
+        album_group = QActionGroup(album_menu)
+        curr_album_mode = self.config.get("album_cover_mode", "off")
+
+        for mode_id, mode_label in [("off", "Off / Hidden"), ("left", "Left Side"), ("right", "Right Side")]:
+            act = QAction(mode_label, album_menu, checkable=True)
+            act.setChecked(curr_album_mode == mode_id)
+            act.triggered.connect(lambda checked, m=mode_id: self.set_album_cover_mode(m))
+            album_group.addAction(act)
+            album_menu.addAction(act)
+
+        # 2. Window Size Submenu
+        size_menu = menu.addMenu("📏 Window Size")
+        size_group = QActionGroup(size_menu)
+        for label, w, h in SIZE_PRESETS:
+            act = QAction(label, size_menu, checkable=True)
+            act.setChecked(self.width() == w and self.height() == h)
+            act.triggered.connect(lambda checked, w=w, h=h: self.set_window_dimensions(w, h))
+            size_group.addAction(act)
+            size_menu.addAction(act)
+
+        size_menu.addSeparator()
+        custom_act = size_menu.addAction("Custom Dimensions...")
+        custom_act.triggered.connect(self.prompt_custom_size)
+
+        # 3. Themes Submenu
         theme_menu = menu.addMenu("🎨 Themes")
         current_theme = self.config.get("theme", "Minimalist")
         theme_group = QActionGroup(theme_menu)

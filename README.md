@@ -12,16 +12,23 @@ A lightweight, hardware-independent, **100% transparent live lyrics overlay** fo
 ## ✨ Features
 
 - **100% True Translucent Background**: Zero window borders, titlebars, background boxes, or dark rectangles. Only the pure floating text glyphs are rendered on your screen.
-- **3-Line Smooth Scrolling Karaoke View**:
+- **3-Line Continuous Smooth Scrolling Karaoke View**:
   - **Previous Line**: Dimmed context line.
   - **Active Line**: Prominent, high-opacity, emphasized text.
   - **Next Line**: Dimmed upcoming preview line.
-- **Fluid Easing Animations**: Buttery 60 FPS vertical slide and opacity cross-fade transitions when advancing to the next lyric line.
+- **Jitter-Free Continuous 60 FPS Interpolation**: Float-based lyric index position tracker with monotonic time smoothing and index hysteresis, eliminating timeline bouncing and boundary stutter.
+- **Album Cover Art (Left / Right / Off)**:
+  - Toggle live album artwork directly on the left or right of the floating lyrics.
+  - Automatically widens window aspect ratio to guarantee spacious, uncompressed typography.
+  - Smooth rounded corners and graceful cross-fades when changing tracks.
+- **Window Resizing & Presets**:
+  - Resize directly from the System Tray or right-click menu (**Compact**, **Standard**, **Large**, **Wide**, **Ultra-Wide**, or **Custom Dimensions**).
+  - Drag-to-resize by grabbing the bottom-right corner when unlocked.
 - **Always-on-Top Floating Window**: Stays visible above active apps, browsers, and borderless games.
 - **Hardware-Level Click-Through**:
   - **Unlocked Mode**: Click and drag the lyrics anywhere to reposition. Right-click opens the context menu.
   - **Locked Mode**: Uses native Windows Win32 API (`WS_EX_TRANSPARENT`) so clicks pass seamlessly through to windows and games underneath.
-- **System Tray Recovery Controller**: A persistent taskbar notification tray icon lets you lock, unlock, switch themes, or exit at any time—even while clicks are passing through.
+- **System Tray Recovery Controller**: A persistent taskbar notification tray icon lets you lock, unlock, resize, toggle album art, switch themes, or exit at any time—even while clicks are passing through.
 - **Intelligent Song Lifecycle**:
   - Automatically queries Windows GSMTC (Global System Media Transport Controls).
   - Fast synchronized `.lrc` lyrics fetching with in-memory caching.
@@ -68,6 +75,9 @@ You can launch the overlay in one of two ways:
 | Action | How to Trigger |
 | :--- | :--- |
 | **Move Overlay** | Left-click and drag the lyrics anywhere across your monitors (when unlocked). |
+| **Resize by Dragging** | Click and drag the bottom-right corner of the overlay (when unlocked). |
+| **Window Size Presets** | Right-click lyrics or System Tray Icon > **Window Size** > select preset or **Custom Dimensions...** |
+| **Album Cover Art** | Right-click lyrics or System Tray Icon > **Album Cover** > select **Off**, **Left Side**, or **Right Side**. |
 | **Open Menu** | Right-click directly on the lyrics text (when unlocked). |
 | **Lock Click-Through** | Right-click lyrics > **Lock (Click-Through)**, or right-click the taskbar tray icon > **Lock**. |
 | **Unlock / Reposition** | Right-click the **System Tray Icon** in your Windows taskbar notification area > uncheck **Lock**. |

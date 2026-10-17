@@ -23,6 +23,8 @@ class LyricsService:
         self._cache: Dict[str, Optional[List[LyricLine]]] = {}
         self._lock = threading.Lock()
         self._fetch_threads: Dict[str, threading.Thread] = {}
+        self._last_matched_index: int = -1
+        self._last_matched_track: str = ""
 
     @staticmethod
     def _clean_track_id(title: str, artist: str) -> str:
@@ -47,10 +49,9 @@ class LyricsService:
             if not matches:
                 continue
 
-            # Strip all timestamp tags from the line to get the lyric text
             text = tag_pattern.sub("", raw_line).strip()
 
-            # Ignore common LRC metadata / credits headers if they're not musical
+            # Ignore non-musical headers
             if text.startswith(("作词", "作曲", "编曲", "ti:", "ar:", "al:", "by:", "offset:")):
                 continue
 
@@ -79,11 +80,9 @@ class LyricsService:
             def worker():
                 parsed = None
                 try:
-                    # 1. Search with title + artist
                     query = f"{title} {artist}".strip()
                     raw = syncedlyrics.search(query)
                     
-                    # 2. Fallback: Search with title only if artist combo returned nothing
                     if not raw and artist and artist.lower() not in title.lower():
                         raw = syncedlyrics.search(title.strip())
 
@@ -116,39 +115,48 @@ class LyricsService:
         self,
         lyrics: Optional[List[LyricLine]],
         pos: float,
-        duration: float
-    ) -> Tuple[str, str, str, str, int]:
+        duration: float,
+        track_key: str = ""
+    ) -> Tuple[str, List[LyricLine], int, str]:
         """
-        Calculates (state, prev_line, active_line, next_line, active_index).
-        States: 'IDLE', 'INTRO', 'LYRICS', 'INSTRUMENTAL', 'NO_LYRICS'
+        Calculates (state, lyrics_list, active_index, special_label).
+        States: 'IDLE', 'LOADING', 'INTRO', 'LYRICS', 'INSTRUMENTAL', 'NO_LYRICS'
         """
+        if track_key != self._last_matched_track:
+            self._last_matched_track = track_key
+            self._last_matched_index = -1
+
         if lyrics is None:
-            return ("LOADING", "", "Fetching synchronized lyrics...", "", -1)
+            return ("LOADING", [], -1, "Fetching synchronized lyrics...")
 
         if len(lyrics) == 0:
-            return ("NO_LYRICS", "", "(No synchronized lyrics found)", "", -1)
+            return ("NO_LYRICS", [], -1, "(No synchronized lyrics found)")
 
         times = [l.time for l in lyrics]
-        idx = bisect.bisect_right(times, pos) - 1
+        raw_idx = bisect.bisect_right(times, pos) - 1
 
-        # Case 1: Before first lyric starts
-        if idx < 0:
-            first_lyric = lyrics[0].text
+        # Hysteresis: Prevent micro-jitter from fluctuating back to previous index
+        if self._last_matched_index >= 0 and raw_idx == self._last_matched_index - 1:
+            # Check if we are within 0.3s of the current index start time
+            curr_time = times[self._last_matched_index]
+            if (curr_time - pos) < 0.30:
+                raw_idx = self._last_matched_index
+
+        self._last_matched_index = raw_idx
+
+        # Case 1: Before first lyric
+        if raw_idx < 0:
             first_time = lyrics[0].time
             if first_time > 2.5:
-                return ("INTRO", "", "(Intro)", first_lyric, -1)
+                return ("INTRO", lyrics, -1, "(Intro)")
             else:
-                return ("LYRICS", "", first_lyric, lyrics[1].text if len(lyrics) > 1 else "", 0)
+                return ("LYRICS", lyrics, 0, "")
 
-        active = lyrics[idx].text
-        prev = lyrics[idx - 1].text if idx > 0 else ""
-        nxt = lyrics[idx + 1].text if idx + 1 < len(lyrics) else ""
+        # Case 2: Interlude / Instrumental break
+        if raw_idx + 1 < len(lyrics):
+            gap = lyrics[raw_idx + 1].time - lyrics[raw_idx].time
+            elapsed_since_active = pos - lyrics[raw_idx].time
+            if gap > 13.0 and elapsed_since_active > 6.5:
+                return ("INSTRUMENTAL", lyrics, raw_idx, "(Instrumental)")
 
-        # Case 2: Check for long instrumental interlude between lyrics
-        if idx + 1 < len(lyrics):
-            gap = lyrics[idx + 1].time - lyrics[idx].time
-            elapsed_since_active = pos - lyrics[idx].time
-            if gap > 14.0 and elapsed_since_active > 7.0:
-                return ("INSTRUMENTAL", active, "(Instrumental)", nxt, idx)
-
-        return ("LYRICS", prev, active, nxt, idx)
+        return ("LYRICS", lyrics, raw_idx, "")
