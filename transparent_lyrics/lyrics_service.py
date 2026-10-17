@@ -19,12 +19,27 @@ class LyricLine:
 class LyricsService:
     """Handles fetching, caching, parsing, and real-time synchronization of LRC lyrics."""
 
-    def __init__(self):
+    def __init__(self, prefer_uncensored: bool = True):
         self._cache: Dict[str, Optional[List[LyricLine]]] = {}
         self._lock = threading.Lock()
         self._fetch_threads: Dict[str, threading.Thread] = {}
         self._last_matched_index: int = -1
         self._last_matched_track: str = ""
+        self.prefer_uncensored: bool = prefer_uncensored
+
+    def set_prefer_uncensored(self, prefer: bool):
+        """Updates uncensored lyrics preference and invalidates cache if changed."""
+        if self.prefer_uncensored != prefer:
+            self.prefer_uncensored = prefer
+            self.clear_cache()
+
+    def clear_cache(self, track_key: Optional[str] = None):
+        """Clears cached lyrics for a specific track or all tracks."""
+        with self._lock:
+            if track_key:
+                self._cache.pop(track_key, None)
+            else:
+                self._cache.clear()
 
     @staticmethod
     def _clean_track_id(title: str, artist: str) -> str:
@@ -81,10 +96,16 @@ class LyricsService:
                 parsed = None
                 try:
                     query = f"{title} {artist}".strip()
-                    raw = syncedlyrics.search(query)
+                    # LRCLIB provides community uncensored lyrics, while NetEase censors explicit words
+                    if self.prefer_uncensored:
+                        providers = ['Lrclib', 'Musixmatch', 'Lyricsify', 'Genius', 'Megalobiz', 'Deezer', 'NetEase']
+                    else:
+                        providers = ['NetEase', 'Musixmatch', 'Lrclib', 'Lyricsify', 'Genius']
+
+                    raw = syncedlyrics.search(query, providers=providers)
                     
                     if not raw and artist and artist.lower() not in title.lower():
-                        raw = syncedlyrics.search(title.strip())
+                        raw = syncedlyrics.search(title.strip(), providers=providers)
 
                     if raw:
                         parsed = self.parse_lrc(raw)

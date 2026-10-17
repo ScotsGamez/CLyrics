@@ -60,6 +60,26 @@ class TestLyricsService(unittest.TestCase):
         self.assertEqual(state, "NO_LYRICS")
         self.assertEqual(special_label, "(No synchronized lyrics found)")
 
+    def test_prefer_uncensored_toggle_and_cache(self):
+        service = LyricsService(prefer_uncensored=True)
+        self.assertTrue(service.prefer_uncensored)
+
+        # Populate fake cache
+        service._cache["song - artist"] = [LyricLine(1.0, "Lyric")]
+        self.assertTrue(service.is_cached("Song", "Artist"))
+
+        # Changing uncensored preference clears cache
+        service.set_prefer_uncensored(False)
+        self.assertFalse(service.prefer_uncensored)
+        self.assertFalse(service.is_cached("Song", "Artist"))
+
+        # Selective cache clearing
+        service._cache["song - artist"] = [LyricLine(1.0, "Lyric")]
+        service._cache["other - artist"] = [LyricLine(2.0, "Other")]
+        service.clear_cache("song - artist")
+        self.assertFalse(service.is_cached("Song", "Artist"))
+        self.assertTrue(service.is_cached("Other", "Artist"))
+
 
 if __name__ == "__main__":
     unittest.main()

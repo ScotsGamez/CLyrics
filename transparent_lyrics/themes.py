@@ -13,7 +13,9 @@ class LyricTheme:
     active_weight: int = int(QFont.Bold)
     context_weight: int = int(QFont.Normal)
     active_opacity: float = 1.0
-    context_opacity: float = 0.45
+    context_opacity: float = 0.50
+    next_opacity: float = 0.50
+    prev_opacity: float = 0.25
     meta_opacity: float = 0.65
 
     def get_active_qcolor(self) -> QColor:

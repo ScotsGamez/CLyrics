@@ -23,6 +23,14 @@ SIZE_PRESETS = [
     ("Ultra-Wide (1560 × 300)", 1560, 300),
 ]
 
+OPACITY_PRESETS = [
+    ("Default (100% / 50% / 25%)", 1.0, 0.50, 0.25),
+    ("High Visibility (100% / 70% / 40%)", 1.0, 0.70, 0.40),
+    ("Ultra Contrast (100% / 40% / 15%)", 1.0, 0.40, 0.15),
+    ("Active Focus (100% / 25% / 10%)", 1.0, 0.25, 0.10),
+    ("Active Only (100% / 0% / 0%)", 1.0, 0.0, 0.0),
+]
+
 
 def _setup_win32_functions():
     if sys.platform != "win32":
@@ -50,6 +58,8 @@ class OverlayWindow(QWidget):
     size_changed = Signal(int, int)
     album_mode_changed = Signal(str)
     sync_offset_changed = Signal(float)
+    opacity_changed = Signal(float, float, float)
+    uncensored_changed = Signal(bool)
 
     def __init__(self, config_manager: ConfigManager, parent=None):
         super().__init__(parent)
@@ -86,6 +96,12 @@ class OverlayWindow(QWidget):
         # Load Album Cover Mode
         album_mode = self.config.get("album_cover_mode", "off")
         self.set_album_cover_mode(album_mode, adjust_ratio=False)
+
+        # Load Opacities
+        active_op = float(self.config.get("active_opacity", 1.0))
+        next_op = float(self.config.get("next_opacity", 0.50))
+        prev_op = float(self.config.get("prev_opacity", 0.25))
+        self.renderer.set_opacities(active_op, next_op, prev_op)
 
         # Apply initial lock state
         init_locked = self.config.get("is_locked", False)
@@ -246,6 +262,35 @@ class OverlayWindow(QWidget):
         if ok:
             self.set_sync_offset(val)
 
+    def set_opacities(self, active: float, next_op: float, prev_op: float):
+        self.config.set("active_opacity", round(active, 2))
+        self.config.set("next_opacity", round(next_op, 2))
+        self.config.set("prev_opacity", round(prev_op, 2))
+        self.renderer.set_opacities(active, next_op, prev_op)
+        self.opacity_changed.emit(active, next_op, prev_op)
+
+    def prompt_custom_opacities(self):
+        curr_act = self.config.get("active_opacity", 1.0)
+        curr_next = self.config.get("next_opacity", 0.50)
+        curr_prev = self.config.get("prev_opacity", 0.25)
+        text, ok = QInputDialog.getText(
+            self,
+            "Custom Opacity Levels",
+            "Enter Active, Next, Previous opacities (0.0 to 1.0, e.g. 1.0, 0.6, 0.3):",
+            text=f"{curr_act}, {curr_next}, {curr_prev}"
+        )
+        if ok and text:
+            try:
+                parts = [float(p.strip()) for p in text.split(",")]
+                if len(parts) == 3:
+                    self.set_opacities(parts[0], parts[1], parts[2])
+            except Exception:
+                pass
+
+    def set_prefer_uncensored(self, prefer: bool):
+        self.config.set("prefer_uncensored", prefer)
+        self.uncensored_changed.emit(prefer)
+
     def reload_settings(self):
         self.config.load()
         self.restore_geometry()
@@ -253,6 +298,13 @@ class OverlayWindow(QWidget):
         self.set_album_cover_mode(self.config.get("album_cover_mode", "off"), adjust_ratio=False)
         self.set_locked(self.config.get("is_locked", False))
         self.sync_offset_changed.emit(float(self.config.get("sync_offset", 0.0)))
+
+        active_op = float(self.config.get("active_opacity", 1.0))
+        next_op = float(self.config.get("next_opacity", 0.50))
+        prev_op = float(self.config.get("prev_opacity", 0.25))
+        self.renderer.set_opacities(active_op, next_op, prev_op)
+        self.opacity_changed.emit(active_op, next_op, prev_op)
+        self.uncensored_changed.emit(bool(self.config.get("prefer_uncensored", True)))
 
     def contextMenuEvent(self, event):
         if self.is_locked:
@@ -324,7 +376,33 @@ class OverlayWindow(QWidget):
             act = QAction(name, theme_menu, checkable=True)
             act.setChecked(name == current_theme)
             act.triggered.connect(lambda checked, n=name: self.apply_theme(n))
-        # 4. Sync Offset Submenu
+            theme_group.addAction(act)
+            theme_menu.addAction(act)
+
+        # 4. Opacity Submenu
+        opacity_menu = menu.addMenu("👁 Opacity")
+        opacity_group = QActionGroup(opacity_menu)
+        curr_act = float(self.config.get("active_opacity", 1.0))
+        curr_next = float(self.config.get("next_opacity", 0.50))
+        curr_prev = float(self.config.get("prev_opacity", 0.25))
+
+        for label, a_val, n_val, p_val in OPACITY_PRESETS:
+            act = QAction(label, opacity_menu, checkable=True)
+            matched = (
+                abs(curr_act - a_val) < 0.01 and
+                abs(curr_next - n_val) < 0.01 and
+                abs(curr_prev - p_val) < 0.01
+            )
+            act.setChecked(matched)
+            act.triggered.connect(lambda checked, a=a_val, n=n_val, p=p_val: self.set_opacities(a, n, p))
+            opacity_group.addAction(act)
+            opacity_menu.addAction(act)
+
+        opacity_menu.addSeparator()
+        custom_op_act = opacity_menu.addAction("Custom Opacities...")
+        custom_op_act.triggered.connect(self.prompt_custom_opacities)
+
+        # 5. Sync Offset Submenu
         offset_menu = menu.addMenu("⏱ Sync Offset")
         offset_group = QActionGroup(offset_menu)
         curr_offset = float(self.config.get("sync_offset", 0.0))
@@ -349,7 +427,13 @@ class OverlayWindow(QWidget):
         custom_off_act = offset_menu.addAction("Custom Offset...")
         custom_off_act.triggered.connect(self.prompt_custom_offset)
 
-        # 5. Settings Submenu
+        # 6. Uncensored Lyrics Toggle
+        uncensored_act = QAction("🔞 Prefer Uncensored Lyrics", menu, checkable=True)
+        uncensored_act.setChecked(bool(self.config.get("prefer_uncensored", True)))
+        uncensored_act.triggered.connect(self.set_prefer_uncensored)
+        menu.addAction(uncensored_act)
+
+        # 7. Settings Submenu
         settings_menu = menu.addMenu("⚙ Settings")
         settings_menu.addAction("📄 Edit settings.yaml...", lambda: self.config.open_in_editor("yaml"))
         settings_menu.addAction("📄 Edit settings.json...", lambda: self.config.open_in_editor("json"))

@@ -60,7 +60,24 @@ class TestIntegration(unittest.TestCase):
         controller.window.set_sync_offset(0.0)
         self.assertEqual(controller.config.get("sync_offset"), 0.0)
 
-        # 8. Clean Shutdown
+        # 8. Test 3-Tier Opacities
+        controller.window.set_opacities(1.0, 0.70, 0.40)
+        self.assertAlmostEqual(controller.window.renderer.active_opacity, 1.0)
+        self.assertAlmostEqual(controller.window.renderer.next_opacity, 0.70)
+        self.assertAlmostEqual(controller.window.renderer.prev_opacity, 0.40)
+        self.assertAlmostEqual(controller.config.get("active_opacity"), 1.0)
+        self.assertAlmostEqual(controller.config.get("next_opacity"), 0.70)
+        self.assertAlmostEqual(controller.config.get("prev_opacity"), 0.40)
+
+        # 9. Test Uncensored Lyrics Preference
+        controller.window.set_prefer_uncensored(False)
+        self.assertFalse(controller.config.get("prefer_uncensored"))
+        self.assertFalse(controller.lyrics_service.prefer_uncensored)
+        controller.window.set_prefer_uncensored(True)
+        self.assertTrue(controller.config.get("prefer_uncensored"))
+        self.assertTrue(controller.lyrics_service.prefer_uncensored)
+
+        # 10. Clean Shutdown
         controller.shutdown()
 
 

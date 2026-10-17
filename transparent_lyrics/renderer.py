@@ -37,6 +37,11 @@ class LyricsRenderer(QWidget):
         self.target_artwork: Optional[QPixmap] = None
         self._art_alpha: float = 1.0
 
+        # 3-tier Opacity Configuration (Active line, Next line, Previous line)
+        self.active_opacity: float = 1.0
+        self.next_opacity: float = 0.50
+        self.prev_opacity: float = 0.25
+
         # Timers & animations
         self._track_change_time: float = 0.0
         self._no_lyrics_time: float = 0.0
@@ -50,6 +55,13 @@ class LyricsRenderer(QWidget):
 
     def set_theme(self, theme: LyricTheme):
         self.theme = theme
+        self.update()
+
+    def set_opacities(self, active: float, next_op: float, prev_op: float):
+        """Sets the 3-tier opacities for active, upcoming, and previous lyrics."""
+        self.active_opacity = max(0.0, min(1.0, active))
+        self.next_opacity = max(0.0, min(1.0, next_op))
+        self.prev_opacity = max(0.0, min(1.0, prev_op))
         self.update()
 
     def set_album_cover_mode(self, mode: str):
@@ -175,16 +187,38 @@ class LyricsRenderer(QWidget):
         if not text or alpha_multiplier <= 0.01:
             return
 
-        painter.setFont(font)
         fm = QFontMetrics(font)
+        adv = fm.horizontalAdvance(text)
+
+        draw_font = font
+        # Anti-smoosh dynamic auto-scaling:
+        # If lyric text exceeds available width, dynamically scale down font size so the entire lyric fits smoothly.
+        if adv > max_width and max_width > 50:
+            orig_size = font.pointSize()
+            min_size = 12 if orig_size >= 18 else 10
+            ratio = max_width / max(1.0, adv)
+            est_size = max(min_size, int(orig_size * ratio))
+
+            test_font = QFont(font)
+            test_font.setPointSize(est_size)
+            test_fm = QFontMetrics(test_font)
+            while test_fm.horizontalAdvance(text) > max_width and est_size > min_size:
+                est_size -= 1
+                test_font.setPointSize(est_size)
+                test_fm = QFontMetrics(test_font)
+
+            draw_font = test_font
+            fm = test_fm
 
         draw_text = text
         if fm.horizontalAdvance(text) > max_width:
-            draw_text = fm.elidedText(text, Qt.ElideMiddle, int(max_width))
+            # If still exceeds width at minimum font size, use right-elision (never middle elision)
+            draw_text = fm.elidedText(text, Qt.ElideRight, int(max_width))
 
         draw_color = QColor(color)
-        final_alpha = max(0.0, min(1.0, color.alphaF() * alpha_multiplier * self._global_fade_alpha))
+        final_alpha = max(0.0, min(1.0, alpha_multiplier * self._global_fade_alpha))
         draw_color.setAlphaF(final_alpha)
+        painter.setFont(draw_font)
         painter.setPen(draw_color)
 
         rect = QRectF(x_center - max_width / 2.0, y_center - 24, max_width, 48)
@@ -279,14 +313,14 @@ class LyricsRenderer(QWidget):
 
             banner_rect = QRectF(text_center_x - text_w / 2.0, 8, text_w, 24)
             b_color = QColor(meta_color)
-            b_color.setAlphaF(max(0.0, min(1.0, meta_color.alphaF() * banner_alpha * self._global_fade_alpha)))
+            b_color.setAlphaF(max(0.0, min(1.0, banner_alpha * self._global_fade_alpha)))
             painter.setFont(font_meta)
             painter.setPen(b_color)
             fm_meta = QFontMetrics(font_meta)
             elided_banner = fm_meta.elidedText(banner_text, Qt.ElideRight, int(text_w))
             painter.drawText(banner_rect, Qt.AlignCenter, elided_banner)
 
-        # 3. Render Continuous 3-Line Scrolling Lyrics
+        # 3. Render Continuous 3-Line Scrolling Lyrics with 3-Tier Opacity
         if self.state in ("LYRICS", "INSTRUMENTAL") and self.lyrics and self._current_index >= 0:
             c_idx = self._current_index
             min_i = max(0, int(c_idx) - 2)
@@ -296,20 +330,39 @@ class LyricsRenderer(QWidget):
                 rel = float(i) - c_idx
                 y_pos = cy + rel * line_spacing
 
-                # Prominence and opacity as smooth continuous functions of relative offset
-                dist = abs(rel)
-                if dist <= 0.5:
-                    # Prominent active zone
-                    p = 1.0 - (dist / 0.5) * (1.0 - self.theme.context_opacity)
-                    font_to_use = font_active
-                    color_to_use = active_color
-                    alpha = p
-                elif dist <= 1.5:
-                    # Secondary / context zone
-                    p = max(0.0, self.theme.context_opacity * (1.0 - (dist - 0.5)))
+                # Prominence and 3-tier opacity as smooth continuous functions of relative offset
+                if -1.0 <= rel < 0.0:
+                    # Transitioning from active (0.0) up towards previous (-1.0)
+                    t = -rel  # 0.0 -> 1.0
+                    alpha = self.active_opacity * (1.0 - t) + self.prev_opacity * t
+                    if t <= 0.5:
+                        font_to_use = font_active
+                        color_to_use = active_color
+                    else:
+                        font_to_use = font_context
+                        color_to_use = context_color
+                elif 0.0 <= rel <= 1.0:
+                    # Transitioning from next (1.0) up towards active (0.0)
+                    t = rel  # 0.0 -> 1.0
+                    alpha = self.active_opacity * (1.0 - t) + self.next_opacity * t
+                    if t <= 0.5:
+                        font_to_use = font_active
+                        color_to_use = active_color
+                    else:
+                        font_to_use = font_context
+                        color_to_use = context_color
+                elif -2.0 <= rel < -1.0:
+                    # Fading out previous line beyond -1.0
+                    t = -rel - 1.0  # 0.0 -> 1.0
+                    alpha = max(0.0, self.prev_opacity * (1.0 - t))
                     font_to_use = font_context
                     color_to_use = context_color
-                    alpha = p
+                elif 1.0 < rel <= 2.0:
+                    # Fading in upcoming line from 2.0 down to 1.0
+                    t = rel - 1.0  # 0.0 -> 1.0
+                    alpha = max(0.0, self.next_opacity * (1.0 - t))
+                    font_to_use = font_context
+                    color_to_use = context_color
                 else:
                     alpha = 0.0
                     font_to_use = font_context
@@ -332,7 +385,7 @@ class LyricsRenderer(QWidget):
                 )
 
         elif self.state == "INTRO":
-            # Show (Intro) in center, and preview upcoming first line
+            # Show (Intro) in center with active opacity, and preview upcoming first line with next opacity
             self._draw_text_line(
                 painter,
                 "(Intro)",
@@ -340,7 +393,7 @@ class LyricsRenderer(QWidget):
                 cy,
                 font_active,
                 active_color,
-                1.0,
+                self.active_opacity,
                 text_w
             )
             if self.lyrics:
@@ -351,7 +404,7 @@ class LyricsRenderer(QWidget):
                     cy + line_spacing,
                     font_context,
                     context_color,
-                    self.theme.context_opacity,
+                    self.next_opacity,
                     text_w
                 )
 
@@ -363,7 +416,7 @@ class LyricsRenderer(QWidget):
                 cy,
                 font_active,
                 active_color,
-                0.85,
+                self.active_opacity * 0.85,
                 text_w
             )
 
@@ -375,7 +428,7 @@ class LyricsRenderer(QWidget):
                 cy,
                 font_active,
                 active_color,
-                1.0,
+                self.active_opacity,
                 text_w
             )
 
@@ -388,7 +441,7 @@ class LyricsRenderer(QWidget):
                 cy - 16,
                 font_active,
                 active_color,
-                1.0,
+                self.active_opacity,
                 text_w
             )
             self._draw_text_line(
@@ -398,6 +451,6 @@ class LyricsRenderer(QWidget):
                 cy + 28,
                 font_context,
                 context_color,
-                self.theme.context_opacity,
+                self.next_opacity,
                 text_w
             )

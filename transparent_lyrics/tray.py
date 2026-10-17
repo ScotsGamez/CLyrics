@@ -2,7 +2,7 @@ from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QIcon, QPixmap, QPainter, QColor, QFont, QAction, QActionGroup, QGuiApplication
 from PySide6.QtWidgets import QSystemTrayIcon, QMenu
 from .themes import THEMES
-from .overlay_window import SIZE_PRESETS
+from .overlay_window import SIZE_PRESETS, OPACITY_PRESETS
 
 
 def create_tray_icon() -> QIcon:
@@ -61,6 +61,8 @@ class LyricsTrayIcon(QSystemTrayIcon):
         self.window.album_mode_changed.connect(self._on_album_mode_changed)
         self.window.size_changed.connect(self._on_size_changed)
         self.window.sync_offset_changed.connect(self._on_sync_offset_changed)
+        self.window.opacity_changed.connect(self._on_opacity_changed)
+        self.window.uncensored_changed.connect(self._on_uncensored_changed)
 
     def _init_menu(self):
         self.menu = QMenu()
@@ -152,7 +154,33 @@ class LyricsTrayIcon(QSystemTrayIcon):
             act = QAction(name, self.theme_menu, checkable=True)
             act.setChecked(name == current_theme)
             act.triggered.connect(lambda checked, n=name: self.window.apply_theme(n))
-        # 4. Sync Offset Submenu
+            self.theme_group.addAction(act)
+            self.theme_menu.addAction(act)
+
+        # 4. Opacity Submenu
+        self.opacity_menu = self.menu.addMenu("👁 Opacity")
+        self.opacity_group = QActionGroup(self.opacity_menu)
+        curr_act = float(self.window.config.get("active_opacity", 1.0))
+        curr_next = float(self.window.config.get("next_opacity", 0.50))
+        curr_prev = float(self.window.config.get("prev_opacity", 0.25))
+
+        for label, a_val, n_val, p_val in OPACITY_PRESETS:
+            act = QAction(label, self.opacity_menu, checkable=True)
+            matched = (
+                abs(curr_act - a_val) < 0.01 and
+                abs(curr_next - n_val) < 0.01 and
+                abs(curr_prev - p_val) < 0.01
+            )
+            act.setChecked(matched)
+            act.triggered.connect(lambda checked, a=a_val, n=n_val, p=p_val: self.window.set_opacities(a, n, p))
+            self.opacity_group.addAction(act)
+            self.opacity_menu.addAction(act)
+
+        self.opacity_menu.addSeparator()
+        custom_op_act = self.opacity_menu.addAction("Custom Opacities...")
+        custom_op_act.triggered.connect(self.window.prompt_custom_opacities)
+
+        # 5. Sync Offset Submenu
         self.offset_menu = self.menu.addMenu("⏱ Sync Offset")
         self.offset_group = QActionGroup(self.offset_menu)
         curr_offset = float(self.window.config.get("sync_offset", 0.0))
@@ -177,9 +205,15 @@ class LyricsTrayIcon(QSystemTrayIcon):
         custom_off_act = self.offset_menu.addAction("Custom Offset...")
         custom_off_act.triggered.connect(self.window.prompt_custom_offset)
 
+        # 6. Uncensored Lyrics Toggle
+        self.uncensored_action = QAction("🔞 Prefer Uncensored Lyrics", self.menu, checkable=True)
+        self.uncensored_action.setChecked(bool(self.window.config.get("prefer_uncensored", True)))
+        self.uncensored_action.triggered.connect(self._toggle_uncensored)
+        self.menu.addAction(self.uncensored_action)
+
         self.menu.addSeparator()
 
-        # 5. Settings Submenu
+        # 7. Settings Submenu
         self.settings_menu = self.menu.addMenu("⚙ Settings")
         self.settings_menu.addAction("📄 Edit settings.yaml...", lambda: self.window.config.open_in_editor("yaml"))
         self.settings_menu.addAction("📄 Edit settings.json...", lambda: self.window.config.open_in_editor("json"))
@@ -210,6 +244,9 @@ class LyricsTrayIcon(QSystemTrayIcon):
     def _toggle_lock(self, checked: bool):
         self.window.set_locked(checked)
 
+    def _toggle_uncensored(self, checked: bool):
+        self.window.set_prefer_uncensored(checked)
+
     def _on_lock_changed(self, is_locked: bool):
         if self.lock_action.isChecked() != is_locked:
             self.lock_action.setChecked(is_locked)
@@ -234,6 +271,23 @@ class LyricsTrayIcon(QSystemTrayIcon):
         for act in self.offset_group.actions():
             dim = f"({offset:+.1f}s)" if offset != 0.0 else "(0.0s)"
             act.setChecked(dim in act.text())
+
+    def _on_opacity_changed(self, active: float, next_op: float, prev_op: float):
+        for act in self.opacity_group.actions():
+            matched = False
+            for label, a_val, n_val, p_val in OPACITY_PRESETS:
+                if act.text() == label:
+                    matched = (
+                        abs(active - a_val) < 0.01 and
+                        abs(next_op - n_val) < 0.01 and
+                        abs(prev_op - p_val) < 0.01
+                    )
+                    break
+            act.setChecked(matched)
+
+    def _on_uncensored_changed(self, prefer: bool):
+        if self.uncensored_action.isChecked() != prefer:
+            self.uncensored_action.setChecked(prefer)
 
     def _toggle_visibility(self, visible: bool):
         if visible:

@@ -13,9 +13,23 @@ A lightweight, hardware-independent, **100% transparent live lyrics overlay** fo
 
 - **100% True Translucent Background**: Zero window borders, titlebars, background boxes, or dark rectangles. Only the pure floating text glyphs are rendered on your screen.
 - **3-Line Continuous Smooth Scrolling Karaoke View**:
-  - **Previous Line**: Dimmed context line.
-  - **Active Line**: Prominent, high-opacity, emphasized text.
-  - **Next Line**: Dimmed upcoming preview line.
+  - **Previous Line**: Gracefully recessed context line with configurable opacity (default 25%).
+  - **Active Line**: Prominent, high-opacity, emphasized text (default 100%).
+  - **Next Line**: Clear upcoming preview line (default 50%).
+- **3-Tier Configurable Opacity Controls**:
+  - Easily adjust or choose presets from the System Tray or right-click menu:
+    - **Default (100% / 50% / 25%)**
+    - **High Visibility (100% / 70% / 40%)**
+    - **Ultra Contrast (100% / 40% / 15%)**
+    - **Active Focus (100% / 25% / 10%)**
+    - **Active Only (100% / 0% / 0%)**
+    - **Custom Opacities...** (set exact floating point values)
+- **Anti-Smoosh Dynamic Font Auto-Scaling**:
+  - Eliminates middle-word truncation and mangled lyrics (e.g. `sit...ading`).
+  - Longer lines and choruses dynamically scale down their font size so the entire sentence fits comfortably across the window.
+- **Uncensored Lyrics Priority (LRCLIB Integration)**:
+  - Toggle **🔞 Prefer Uncensored Lyrics** directly from the System Tray or context menu.
+  - Prioritizes crowd-sourced uncensored providers (LRCLIB) over censored providers (NetEase) so explicit words, curses, and original artist lyrics are never replaced or filtered out.
 - **Jitter-Free Continuous 60 FPS Interpolation**: Float-based lyric index position tracker with monotonic time smoothing and index hysteresis, eliminating timeline bouncing and boundary stutter.
 - **Album Cover Art (Left / Right / Off)**:
   - Toggle live album artwork directly on the left or right of the floating lyrics.
@@ -87,6 +101,8 @@ Double-click **`setup.bat`**:
 | **Unlock / Reposition** | Right-click the **System Tray Icon** in your Windows taskbar notification area > uncheck **Lock**. |
 | **Center on Screen** | Right-click > **Center on Screen**. |
 | **Sync Offset** | Right-click lyrics or System Tray Icon > **Sync Offset** > select **±0.5s**, **±1.0s**, or custom offset. |
+| **Opacity Presets** | Right-click lyrics or System Tray Icon > **Opacity** > select preset or **Custom Opacities...** |
+| **Uncensored Lyrics** | Right-click lyrics or System Tray Icon > toggle **🔞 Prefer Uncensored Lyrics**. |
 | **Change Theme** | Right-click > **Themes** > select your preferred palette. |
 | **Edit Settings (YAML/JSON)** | Right-click > **Settings** > select **Edit settings.yaml...** or **Edit settings.json...** |
 | **Reload Settings** | Right-click > **Settings** > select **Reload Settings from File**. |
@@ -135,9 +151,12 @@ transparent-lyrics-overlay/
 ├── scripts/
 │   └── media_reader.ps1             # WinRT Windows Media daemon
 ├── tests/
+│   ├── test_artwork_service.py
 │   ├── test_config.py
 │   ├── test_integration.py
 │   ├── test_lyrics_service.py
+│   ├── test_renderer.py
+│   ├── test_smooth_time_tracker.py
 │   └── test_themes.py
 └── transparent_lyrics/
     ├── __init__.py

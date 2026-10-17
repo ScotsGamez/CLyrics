@@ -15,6 +15,10 @@ DEFAULT_CONFIG: Dict[str, Any] = {
     "context_font_size": 15,
     "album_cover_mode": "off",  # "off", "left", "right"
     "sync_offset": 0.0,         # In seconds (e.g. +0.5 or -0.5)
+    "active_opacity": 1.0,      # Active lyric line opacity (0.0 - 1.0)
+    "next_opacity": 0.50,       # Next upcoming lyric opacity (0.0 - 1.0)
+    "prev_opacity": 0.25,       # Previous lyric opacity (0.0 - 1.0)
+    "prefer_uncensored": True,  # Prioritize uncensored lyrics providers (LRCLIB)
 }
 
 # Primary local location (project root) and AppData fallback
@@ -71,7 +75,12 @@ def dump_annotated_yaml(data: Dict[str, Any]) -> str:
         f"is_locked: {'true' if data.get('is_locked', False) else 'false'}  # Click-through mode\n",
         f"theme: \"{data.get('theme', 'Minimalist')}\"  # Minimalist, Cyberpunk, Sunset, Emerald\n",
         f"album_cover_mode: \"{data.get('album_cover_mode', 'off')}\"  # off, left, right\n",
+        f"prefer_uncensored: {'true' if data.get('prefer_uncensored', True) else 'false'}  # Prioritize uncensored lyrics (LRCLIB)\n",
         f"sync_offset: {data.get('sync_offset', 0.0)}  # In seconds (e.g. +0.5 earlier, -0.5 later)\n\n",
+        "# --- Opacity Levels (0.0 to 1.0) ---\n",
+        f"active_opacity: {data.get('active_opacity', 1.0)}  # Active line (1.0 = 100%)\n",
+        f"next_opacity: {data.get('next_opacity', 0.50)}  # Next line (0.50 = 50%)\n",
+        f"prev_opacity: {data.get('prev_opacity', 0.25)}  # Previous line (0.25 = 25%)\n\n",
         "# --- Typography ---\n",
         f"font_family: \"{data.get('font_family', 'Segoe UI')}\"\n",
         f"active_font_size: {data.get('active_font_size', 22)}\n",

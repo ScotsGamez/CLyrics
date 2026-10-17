@@ -73,12 +73,14 @@ class TransparentLyricsApp(QObject):
     def __init__(self):
         super().__init__()
         self.config = ConfigManager()
-        self.lyrics_service = LyricsService()
+        prefer_uncensored = bool(self.config.get("prefer_uncensored", True))
+        self.lyrics_service = LyricsService(prefer_uncensored=prefer_uncensored)
         self.artwork_service = ArtworkService()
         self.time_tracker = SmoothTimeTracker()
 
         # Create overlay window
         self.window = OverlayWindow(self.config)
+        self.window.uncensored_changed.connect(self.on_uncensored_changed)
 
         # Create system tray icon
         self.tray = LyricsTrayIcon(self.window)
@@ -167,6 +169,24 @@ class TransparentLyricsApp(QObject):
     def on_lyrics_fetched(self, track_key: str, parsed_lines):
         if track_key == self.current_track_key:
             self._sync_lyrics_tick()
+
+    def on_uncensored_changed(self, prefer: bool):
+        self.lyrics_service.set_prefer_uncensored(prefer)
+        if self.last_title:
+            self.window.renderer.update_lyrics_state(
+                state="LOADING",
+                title=self.last_title,
+                artist=self.last_artist,
+                is_playing=self.last_playing,
+                lyrics=[],
+                active_index=-1,
+                special_label="Fetching synchronized lyrics..."
+            )
+            self.lyrics_service.fetch_lyrics_async(
+                self.last_title,
+                self.last_artist,
+                callback=self.on_lyrics_fetched
+            )
 
     @Slot(str, object)
     def on_artwork_ready(self, track_key: str, pixmap):
