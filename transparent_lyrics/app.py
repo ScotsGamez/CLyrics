@@ -2,12 +2,13 @@ import sys
 import os
 import time
 import signal
+import subprocess
 from pathlib import Path
 
 from PySide6.QtCore import Qt, QObject, Slot, QTimer
 from PySide6.QtWidgets import QApplication
 
-from .config import ConfigManager
+from .config import ConfigManager, PROJECT_ROOT
 from .lyrics_service import LyricsService
 from .media_service import MediaService
 from .artwork_service import ArtworkService
@@ -81,6 +82,7 @@ class TransparentLyricsApp(QObject):
         # Create overlay window
         self.window = OverlayWindow(self.config)
         self.window.uncensored_changed.connect(self.on_uncensored_changed)
+        self.window.restart_requested.connect(self.restart_application)
 
         # Create system tray icon
         self.tray = LyricsTrayIcon(self.window)
@@ -219,12 +221,29 @@ class TransparentLyricsApp(QObject):
         )
 
     def shutdown(self):
-        if self.sync_timer:
+        if hasattr(self, "sync_timer") and self.sync_timer:
             self.sync_timer.stop()
-        if self.media_service:
+        if hasattr(self, "media_service") and self.media_service:
             self.media_service.stop()
-        if self.tray:
+        if hasattr(self, "tray") and self.tray:
             self.tray.hide()
+        if hasattr(self, "window") and self.window:
+            self.window.close()
+
+    def restart_application(self):
+        """Cleanly shuts down running services and restarts the application process."""
+        self.shutdown()
+        python = sys.executable
+        script = str(PROJECT_ROOT / "run.py")
+        if not os.path.exists(script) and sys.argv and os.path.exists(sys.argv[0]):
+            script = sys.argv[0]
+
+        kwargs = {}
+        if sys.platform == "win32":
+            kwargs["creationflags"] = getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0x00000200)
+
+        subprocess.Popen([python, script], cwd=str(PROJECT_ROOT), **kwargs)
+        QApplication.quit()
 
 
 def main():

@@ -26,6 +26,7 @@ class SettingsDialog(QDialog):
     """Dedicated dark-themed graphical configuration manager for Transparent Live Lyrics."""
 
     settings_applied = Signal(dict)
+    restart_requested = Signal()
 
     def __init__(self, config_manager: ConfigManager, parent=None):
         super().__init__(parent)
@@ -496,7 +497,7 @@ class SettingsDialog(QDialog):
         self.uncensored_check.setChecked(True)
 
     def _save_and_apply(self):
-        """Collects GUI values, atomically updates ConfigManager, and emits settings_applied."""
+        """Collects GUI values, saves to ConfigManager, and either applies theme live or restarts app."""
         new_settings = {
             "active_opacity": round(self.active_slider.value() / 100.0, 2),
             "next_opacity": round(self.next_slider.value() / 100.0, 2),
@@ -513,6 +514,31 @@ class SettingsDialog(QDialog):
             "prefer_uncensored": self.uncensored_check.isChecked(),
         }
 
+        changed_keys = []
+        for key, new_val in new_settings.items():
+            old_val = self.config.get(key)
+            if key in ("active_opacity", "next_opacity", "prev_opacity", "sync_offset"):
+                if old_val is None or abs(float(old_val) - float(new_val)) > 1e-4:
+                    changed_keys.append(key)
+            elif key in ("width", "height", "active_font_size", "context_font_size"):
+                if old_val is None or int(old_val) != int(new_val):
+                    changed_keys.append(key)
+            elif key in ("is_locked", "prefer_uncensored"):
+                if old_val is None or bool(old_val) != bool(new_val):
+                    changed_keys.append(key)
+            else:
+                if str(old_val) != str(new_val):
+                    changed_keys.append(key)
+
         self.config.bulk_set(new_settings)
-        self.settings_applied.emit(new_settings)
         self.accept()
+
+        if not changed_keys:
+            return
+
+        if set(changed_keys) == {"theme"}:
+            # Only theme changed: safe live update without restarting
+            self.settings_applied.emit({"theme": new_settings["theme"]})
+        else:
+            # Non-theme settings changed: restart the application to avoid stalls
+            self.restart_requested.emit()

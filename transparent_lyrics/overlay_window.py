@@ -60,6 +60,7 @@ class OverlayWindow(QWidget):
     sync_offset_changed = Signal(float)
     opacity_changed = Signal(float, float, float)
     uncensored_changed = Signal(bool)
+    restart_requested = Signal()
 
     def __init__(self, config_manager: ConfigManager, parent=None):
         super().__init__(parent)
@@ -312,6 +313,7 @@ class OverlayWindow(QWidget):
         if not hasattr(self, "_settings_dialog") or self._settings_dialog is None:
             self._settings_dialog = SettingsDialog(self.config, self)
             self._settings_dialog.settings_applied.connect(self._on_settings_applied)
+            self._settings_dialog.restart_requested.connect(self.restart_requested.emit)
 
         self._settings_dialog.load_from_config()
         self._settings_dialog.show()
@@ -319,38 +321,9 @@ class OverlayWindow(QWidget):
         self._settings_dialog.activateWindow()
 
     def _on_settings_applied(self, settings: dict):
-        """Applies newly saved settings from SettingsDialog cleanly without menu deadlocks."""
-        # Geometry
-        w = settings.get("width", self.width())
-        h = settings.get("height", self.height())
-        if w != self.width() or h != self.height():
-            self.set_window_dimensions(w, h)
-
-        # Theme
+        """Applies safe live settings (such as theme color change) without full restart."""
         if "theme" in settings:
             self.apply_theme(settings["theme"])
-
-        # Album Cover Art
-        if "album_cover_mode" in settings:
-            self.set_album_cover_mode(settings["album_cover_mode"], adjust_ratio=False)
-
-        # 3-Tier Opacity
-        active = float(settings.get("active_opacity", 1.0))
-        next_op = float(settings.get("next_opacity", 0.50))
-        prev_op = float(settings.get("prev_opacity", 0.25))
-        self.set_opacities(active, next_op, prev_op)
-
-        # Lock mode
-        if "is_locked" in settings:
-            self.set_locked(settings["is_locked"])
-
-        # Sync offset
-        if "sync_offset" in settings:
-            self.set_sync_offset(settings["sync_offset"])
-
-        # Uncensored lyrics
-        if "prefer_uncensored" in settings:
-            self.set_prefer_uncensored(settings["prefer_uncensored"])
 
     def contextMenuEvent(self, event):
         if self.is_locked:

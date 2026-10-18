@@ -77,26 +77,23 @@ class TestIntegration(unittest.TestCase):
         self.assertTrue(controller.config.get("prefer_uncensored"))
         self.assertTrue(controller.lyrics_service.prefer_uncensored)
 
-        # 10. Test Settings Dialog and applied settings
+        # 10. Test Settings Dialog, safe live theme apply, and restart flow
+        from unittest.mock import patch
         controller.window.open_settings_dialog()
         self.assertIsNotNone(controller.window._settings_dialog)
         controller.window._on_settings_applied({
             "theme": "Sunset",
-            "active_opacity": 0.95,
-            "next_opacity": 0.45,
-            "prev_opacity": 0.15,
-            "width": 1100,
-            "height": 260
         })
         self.assertEqual(controller.window.renderer.theme.name, "Sunset")
-        self.assertEqual(controller.window.width(), 1100)
-        self.assertEqual(controller.window.height(), 260)
-        self.assertAlmostEqual(controller.window.renderer.active_opacity, 0.95)
-        self.assertAlmostEqual(controller.window.renderer.next_opacity, 0.45)
-        self.assertAlmostEqual(controller.window.renderer.prev_opacity, 0.15)
         controller.window._settings_dialog.close()
 
-        # 11. Clean Shutdown
+        # 11. Test restart_application execution without killing test runner
+        with patch("subprocess.Popen") as mock_popen, patch("PySide6.QtWidgets.QApplication.quit") as mock_quit:
+            controller.restart_application()
+            mock_popen.assert_called_once()
+            mock_quit.assert_called_once()
+
+        # 12. Clean Shutdown
         controller.shutdown()
 
 
