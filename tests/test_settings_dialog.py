@@ -8,9 +8,18 @@ os.environ["QT_QPA_PLATFORM"] = "offscreen"
 class TestSettingsDialog(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
+        import tempfile
+        cls.test_dir = tempfile.mkdtemp(prefix="clyrics_test_settings_")
+        os.environ["TRANSPARENT_LYRICS_TEST_DIR"] = cls.test_dir
         cls.app = QApplication.instance()
         if not cls.app:
             cls.app = QApplication([])
+
+    @classmethod
+    def tearDownClass(cls):
+        import shutil
+        shutil.rmtree(cls.test_dir, ignore_errors=True)
+        os.environ.pop("TRANSPARENT_LYRICS_TEST_DIR", None)
 
     def test_settings_dialog_theme_only_applies_live_without_restart(self):
         from transparent_lyrics.config import ConfigManager

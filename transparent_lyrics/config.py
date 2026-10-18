@@ -68,8 +68,14 @@ class ConfigManager:
     def __init__(self, root_dir: Optional[Path] = None, appdata_dir: Optional[Path] = None):
         self.config = DEFAULT_CONFIG.copy()
 
-        self.root_dir = Path(root_dir) if root_dir else PROJECT_ROOT
-        self.appdata_dir = Path(appdata_dir) if appdata_dir else APPDATA_DIR
+        override_env = os.environ.get("TRANSPARENT_LYRICS_TEST_DIR")
+        if override_env:
+            test_dir = Path(override_env)
+            self.root_dir = Path(root_dir) if root_dir else test_dir
+            self.appdata_dir = Path(appdata_dir) if appdata_dir else (test_dir / "appdata")
+        else:
+            self.root_dir = Path(root_dir) if root_dir else PROJECT_ROOT
+            self.appdata_dir = Path(appdata_dir) if appdata_dir else APPDATA_DIR
 
         self.local_json = self.root_dir / "settings.json"
         self.appdata_json = self.appdata_dir / "settings.json"

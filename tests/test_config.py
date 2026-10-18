@@ -11,6 +11,17 @@ from transparent_lyrics.config import (
 
 
 class TestConfig(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.test_dir = tempfile.mkdtemp(prefix="clyrics_test_config_")
+        os.environ["TRANSPARENT_LYRICS_TEST_DIR"] = cls.test_dir
+
+    @classmethod
+    def tearDownClass(cls):
+        import shutil
+        shutil.rmtree(cls.test_dir, ignore_errors=True)
+        os.environ.pop("TRANSPARENT_LYRICS_TEST_DIR", None)
+
     def test_default_values(self):
         self.assertIn("pos_x", DEFAULT_CONFIG)
         self.assertIn("is_locked", DEFAULT_CONFIG)

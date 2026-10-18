@@ -9,9 +9,18 @@ os.environ["QT_QPA_PLATFORM"] = "offscreen"
 class TestIntegration(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
+        import tempfile
+        cls.test_dir = tempfile.mkdtemp(prefix="clyrics_test_")
+        os.environ["TRANSPARENT_LYRICS_TEST_DIR"] = cls.test_dir
         cls.app = QApplication.instance()
         if not cls.app:
             cls.app = QApplication([])
+
+    @classmethod
+    def tearDownClass(cls):
+        import shutil
+        shutil.rmtree(cls.test_dir, ignore_errors=True)
+        os.environ.pop("TRANSPARENT_LYRICS_TEST_DIR", None)
 
     def test_app_lifecycle_and_events(self):
         from transparent_lyrics.app import TransparentLyricsApp
@@ -88,7 +97,7 @@ class TestIntegration(unittest.TestCase):
         controller.window._settings_dialog.close()
 
         # 11. Test restart_application execution without killing test runner
-        with patch("subprocess.Popen") as mock_popen, patch("PySide6.QtWidgets.QApplication.quit") as mock_quit:
+        with patch("transparent_lyrics.app.subprocess.Popen") as mock_popen, patch("PySide6.QtWidgets.QApplication.quit") as mock_quit:
             controller.restart_application()
             mock_popen.assert_called_once()
             mock_quit.assert_called_once()

@@ -273,6 +273,8 @@ class TransparentLyricsApp(QObject):
             self.tray.hide()
         if hasattr(self, "window") and self.window:
             self.window.close()
+        from .media_service import kill_orphaned_media_readers
+        kill_orphaned_media_readers()
 
     def restart_application(self):
         """Cleanly shuts down running services and restarts the application process."""

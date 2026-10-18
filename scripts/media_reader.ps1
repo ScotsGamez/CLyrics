@@ -1,6 +1,10 @@
 # media_reader.ps1
 # Emits real-time JSON events for currently playing Windows media via GSMTC
 # Uses pure local hardware CPU timers (System.Diagnostics.Stopwatch) with ZERO reliance on wall-clock / internet time
+param(
+    [int]$ParentPid = 0
+)
+
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 
 [Windows.Media.Control.GlobalSystemMediaTransportControlsSessionManager, Windows.Media, ContentType = WindowsRuntime] | Out-Null
@@ -29,6 +33,18 @@ $sw = [System.Diagnostics.Stopwatch]::new()
 $lastTrackId = ""
 
 while ($true) {
+    # Parent process watchdog: if parent process exited or crashed, exit immediately
+    if ($ParentPid -gt 0) {
+        try {
+            $p = Get-Process -Id $ParentPid -ErrorAction SilentlyContinue
+            if (-not $p -or $p.HasExited) {
+                exit 0
+            }
+        } catch {
+            exit 0
+        }
+    }
+
     try {
         $session = $mgr.GetCurrentSession()
         if ($session) {
