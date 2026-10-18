@@ -1,5 +1,13 @@
+import os
+import json
+import tempfile
 import unittest
-from transparent_lyrics.config import ConfigManager, parse_simple_yaml, dump_annotated_yaml, DEFAULT_CONFIG
+from pathlib import Path
+from transparent_lyrics.config import (
+    ConfigManager,
+    DEFAULT_CONFIG,
+    _parse_legacy_yaml,
+)
 
 
 class TestConfig(unittest.TestCase):
@@ -18,37 +26,61 @@ class TestConfig(unittest.TestCase):
         cfg.set("test_key", "test_val")
         self.assertEqual(cfg.get("test_key"), "test_val")
 
-    def test_yaml_roundtrip(self):
-        data = {
-            "pos_x": 150,
-            "width": 1100,
-            "is_locked": True,
-            "theme": "Cyberpunk",
-            "sync_offset": -1.25,
-            "album_cover_mode": "left",
-            "active_opacity": 1.0,
-            "next_opacity": 0.60,
-            "prev_opacity": 0.30,
-            "prefer_uncensored": True,
-        }
-        yaml_str = dump_annotated_yaml(data)
-        self.assertIn("pos_x: 150", yaml_str)
-        self.assertIn("theme: \"Cyberpunk\"", yaml_str)
-        self.assertIn("active_opacity: 1.0", yaml_str)
-        self.assertIn("next_opacity: 0.6", yaml_str)
-        self.assertIn("prefer_uncensored: true", yaml_str)
+    def test_bulk_set(self):
+        cfg = ConfigManager()
+        cfg.bulk_set({
+            "theme": "Sunset",
+            "active_opacity": 0.85,
+            "sync_offset": 1.2,
+        })
+        self.assertEqual(cfg.get("theme"), "Sunset")
+        self.assertAlmostEqual(cfg.get("active_opacity"), 0.85)
+        self.assertAlmostEqual(cfg.get("sync_offset"), 1.2)
 
-        parsed = parse_simple_yaml(yaml_str)
-        self.assertEqual(parsed.get("pos_x"), 150)
-        self.assertEqual(parsed.get("width"), 1100)
-        self.assertEqual(parsed.get("is_locked"), True)
+    def test_legacy_yaml_parser(self):
+        yaml_content = """
+        # Comments should be ignored
+        pos_x: 200
+        theme: "Cyberpunk"
+        is_locked: true
+        active_opacity: 0.95
+        next_opacity: 0.65
+        sync_offset: -0.75
+        prefer_uncensored: false
+        """
+        parsed = _parse_legacy_yaml(yaml_content)
+        self.assertEqual(parsed.get("pos_x"), 200)
         self.assertEqual(parsed.get("theme"), "Cyberpunk")
-        self.assertAlmostEqual(parsed.get("sync_offset"), -1.25)
-        self.assertEqual(parsed.get("album_cover_mode"), "left")
-        self.assertAlmostEqual(parsed.get("active_opacity"), 1.0)
-        self.assertAlmostEqual(parsed.get("next_opacity"), 0.60)
-        self.assertAlmostEqual(parsed.get("prev_opacity"), 0.30)
-        self.assertEqual(parsed.get("prefer_uncensored"), True)
+        self.assertEqual(parsed.get("is_locked"), True)
+        self.assertAlmostEqual(parsed.get("active_opacity"), 0.95)
+        self.assertAlmostEqual(parsed.get("next_opacity"), 0.65)
+        self.assertAlmostEqual(parsed.get("sync_offset"), -0.75)
+        self.assertEqual(parsed.get("prefer_uncensored"), False)
+
+    def test_legacy_yaml_migration(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp_path = Path(tmpdir)
+            legacy_yaml = tmp_path / "settings.yaml"
+
+            # Write legacy yaml file before creating ConfigManager
+            legacy_yaml.write_text(
+                "theme: \"Emerald\"\nwidth: 1200\nactive_opacity: 0.8\nis_locked: true\n",
+                encoding="utf-8"
+            )
+
+            # Initialize ConfigManager in isolated directory
+            cfg = ConfigManager(root_dir=tmp_path, appdata_dir=tmp_path / "appdata")
+
+            self.assertEqual(cfg.get("theme"), "Emerald")
+            self.assertEqual(cfg.get("width"), 1200)
+            self.assertAlmostEqual(cfg.get("active_opacity"), 0.8)
+            self.assertEqual(cfg.get("is_locked"), True)
+
+            # settings.json must now exist in root_dir
+            self.assertTrue(cfg.local_json.exists())
+            saved_json = json.loads(cfg.local_json.read_text(encoding="utf-8"))
+            self.assertEqual(saved_json.get("theme"), "Emerald")
+            self.assertEqual(saved_json.get("width"), 1200)
 
 
 if __name__ == "__main__":

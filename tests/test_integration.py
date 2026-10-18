@@ -77,7 +77,26 @@ class TestIntegration(unittest.TestCase):
         self.assertTrue(controller.config.get("prefer_uncensored"))
         self.assertTrue(controller.lyrics_service.prefer_uncensored)
 
-        # 10. Clean Shutdown
+        # 10. Test Settings Dialog and applied settings
+        controller.window.open_settings_dialog()
+        self.assertIsNotNone(controller.window._settings_dialog)
+        controller.window._on_settings_applied({
+            "theme": "Sunset",
+            "active_opacity": 0.95,
+            "next_opacity": 0.45,
+            "prev_opacity": 0.15,
+            "width": 1100,
+            "height": 260
+        })
+        self.assertEqual(controller.window.renderer.theme.name, "Sunset")
+        self.assertEqual(controller.window.width(), 1100)
+        self.assertEqual(controller.window.height(), 260)
+        self.assertAlmostEqual(controller.window.renderer.active_opacity, 0.95)
+        self.assertAlmostEqual(controller.window.renderer.next_opacity, 0.45)
+        self.assertAlmostEqual(controller.window.renderer.prev_opacity, 0.15)
+        controller.window._settings_dialog.close()
+
+        # 11. Clean Shutdown
         controller.shutdown()
 
 

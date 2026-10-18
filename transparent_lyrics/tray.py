@@ -1,8 +1,6 @@
 from PySide6.QtCore import Qt, Signal
-from PySide6.QtGui import QIcon, QPixmap, QPainter, QColor, QFont, QAction, QActionGroup, QGuiApplication
+from PySide6.QtGui import QIcon, QPixmap, QPainter, QColor, QFont, QAction, QGuiApplication
 from PySide6.QtWidgets import QSystemTrayIcon, QMenu
-from .themes import THEMES
-from .overlay_window import SIZE_PRESETS, OPACITY_PRESETS
 
 
 def create_tray_icon() -> QIcon:
@@ -46,7 +44,7 @@ def create_tray_icon() -> QIcon:
 
 
 class LyricsTrayIcon(QSystemTrayIcon):
-    """System Tray Icon providing background window control, resizing, and album art management."""
+    """Clean and uncrowded System Tray Icon providing window controls and settings access."""
 
     def __init__(self, overlay_window, parent=None):
         super().__init__(create_tray_icon(), parent)
@@ -57,12 +55,6 @@ class LyricsTrayIcon(QSystemTrayIcon):
 
         # Connect overlay state signals
         self.window.lock_changed.connect(self._on_lock_changed)
-        self.window.theme_changed.connect(self._on_theme_changed)
-        self.window.album_mode_changed.connect(self._on_album_mode_changed)
-        self.window.size_changed.connect(self._on_size_changed)
-        self.window.sync_offset_changed.connect(self._on_sync_offset_changed)
-        self.window.opacity_changed.connect(self._on_opacity_changed)
-        self.window.uncensored_changed.connect(self._on_uncensored_changed)
 
     def _init_menu(self):
         self.menu = QMenu()
@@ -118,114 +110,19 @@ class LyricsTrayIcon(QSystemTrayIcon):
 
         self.menu.addSeparator()
 
-        # 1. Album Cover Submenu
-        self.album_menu = self.menu.addMenu("🖼 Album Cover")
-        self.album_group = QActionGroup(self.album_menu)
-        curr_album_mode = self.window.config.get("album_cover_mode", "off")
-
-        for mode_id, mode_label in [("off", "Off / Hidden"), ("left", "Left Side"), ("right", "Right Side")]:
-            act = QAction(mode_label, self.album_menu, checkable=True)
-            act.setChecked(curr_album_mode == mode_id)
-            act.triggered.connect(lambda checked, m=mode_id: self.window.set_album_cover_mode(m))
-            self.album_group.addAction(act)
-            self.album_menu.addAction(act)
-
-        # 2. Window Size Submenu
-        self.size_menu = self.menu.addMenu("📏 Window Size")
-        self.size_group = QActionGroup(self.size_menu)
-
-        for label, w, h in SIZE_PRESETS:
-            act = QAction(label, self.size_menu, checkable=True)
-            act.setChecked(self.window.width() == w and self.window.height() == h)
-            act.triggered.connect(lambda checked, w=w, h=h: self.window.set_window_dimensions(w, h))
-            self.size_group.addAction(act)
-            self.size_menu.addAction(act)
-
-        self.size_menu.addSeparator()
-        custom_act = self.size_menu.addAction("Custom Dimensions...")
-        custom_act.triggered.connect(self.window.prompt_custom_size)
-
-        # 3. Themes Submenu
-        self.theme_menu = self.menu.addMenu("🎨 Themes")
-        self.theme_group = QActionGroup(self.theme_menu)
-        current_theme = self.window.config.get("theme", "Minimalist")
-
-        for name in THEMES.keys():
-            act = QAction(name, self.theme_menu, checkable=True)
-            act.setChecked(name == current_theme)
-            act.triggered.connect(lambda checked, n=name: self.window.apply_theme(n))
-            self.theme_group.addAction(act)
-            self.theme_menu.addAction(act)
-
-        # 4. Opacity Submenu
-        self.opacity_menu = self.menu.addMenu("👁 Opacity")
-        self.opacity_group = QActionGroup(self.opacity_menu)
-        curr_act = float(self.window.config.get("active_opacity", 1.0))
-        curr_next = float(self.window.config.get("next_opacity", 0.50))
-        curr_prev = float(self.window.config.get("prev_opacity", 0.25))
-
-        for label, a_val, n_val, p_val in OPACITY_PRESETS:
-            act = QAction(label, self.opacity_menu, checkable=True)
-            matched = (
-                abs(curr_act - a_val) < 0.01 and
-                abs(curr_next - n_val) < 0.01 and
-                abs(curr_prev - p_val) < 0.01
-            )
-            act.setChecked(matched)
-            act.triggered.connect(lambda checked, a=a_val, n=n_val, p=p_val: self.window.set_opacities(a, n, p))
-            self.opacity_group.addAction(act)
-            self.opacity_menu.addAction(act)
-
-        self.opacity_menu.addSeparator()
-        custom_op_act = self.opacity_menu.addAction("Custom Opacities...")
-        custom_op_act.triggered.connect(self.window.prompt_custom_opacities)
-
-        # 5. Sync Offset Submenu
-        self.offset_menu = self.menu.addMenu("⏱ Sync Offset")
-        self.offset_group = QActionGroup(self.offset_menu)
-        curr_offset = float(self.window.config.get("sync_offset", 0.0))
-
-        OFFSET_PRESETS = [
-            ("No Offset (0.0s)", 0.0),
-            ("+0.5s Earlier", 0.5),
-            ("+1.0s Earlier", 1.0),
-            ("+2.0s Earlier", 2.0),
-            ("-0.5s Later", -0.5),
-            ("-1.0s Later", -1.0),
-            ("-2.0s Later", -2.0),
-        ]
-        for label, val in OFFSET_PRESETS:
-            act = QAction(label, self.offset_menu, checkable=True)
-            act.setChecked(abs(curr_offset - val) < 0.01)
-            act.triggered.connect(lambda checked, v=val: self.window.set_sync_offset(v))
-            self.offset_group.addAction(act)
-            self.offset_menu.addAction(act)
-
-        self.offset_menu.addSeparator()
-        custom_off_act = self.offset_menu.addAction("Custom Offset...")
-        custom_off_act.triggered.connect(self.window.prompt_custom_offset)
-
-        # 6. Uncensored Lyrics Toggle
-        self.uncensored_action = QAction("🔞 Prefer Uncensored Lyrics", self.menu, checkable=True)
-        self.uncensored_action.setChecked(bool(self.window.config.get("prefer_uncensored", True)))
-        self.uncensored_action.triggered.connect(self._toggle_uncensored)
-        self.menu.addAction(self.uncensored_action)
+        # Dedicated Settings GUI Window
+        self.settings_action = self.menu.addAction("⚙ Settings...")
+        self.settings_action.triggered.connect(self.window.open_settings_dialog)
 
         self.menu.addSeparator()
 
-        # 7. Settings Submenu
-        self.settings_menu = self.menu.addMenu("⚙ Settings")
-        self.settings_menu.addAction("📄 Edit settings.yaml...", lambda: self.window.config.open_in_editor("yaml"))
-        self.settings_menu.addAction("📄 Edit settings.json...", lambda: self.window.config.open_in_editor("json"))
-        self.settings_menu.addAction("📁 Open Settings Folder...", self.window.config.open_folder)
-        self.settings_menu.addSeparator()
-        self.settings_menu.addAction("🔄 Reload Settings from File", self.window.reload_settings)
-
-        self.menu.addSeparator()
+        # Desktop Shortcut
         shortcut_act = self.menu.addAction("🔗 Create Desktop Shortcut")
         shortcut_act.triggered.connect(self._create_desktop_shortcut)
 
         self.menu.addSeparator()
+
+        # Exit Application
         exit_action = self.menu.addAction("✕ Exit")
         exit_action.triggered.connect(QGuiApplication.quit)
 
@@ -244,50 +141,9 @@ class LyricsTrayIcon(QSystemTrayIcon):
     def _toggle_lock(self, checked: bool):
         self.window.set_locked(checked)
 
-    def _toggle_uncensored(self, checked: bool):
-        self.window.set_prefer_uncensored(checked)
-
     def _on_lock_changed(self, is_locked: bool):
         if self.lock_action.isChecked() != is_locked:
             self.lock_action.setChecked(is_locked)
-
-    def _on_theme_changed(self, theme_name: str):
-        for act in self.theme_group.actions():
-            act.setChecked(act.text() == theme_name)
-
-    def _on_album_mode_changed(self, mode: str):
-        mode_labels = {"off": "Off / Hidden", "left": "Left Side", "right": "Right Side"}
-        target_label = mode_labels.get(mode, "Off / Hidden")
-        for act in self.album_group.actions():
-            act.setChecked(act.text() == target_label)
-
-    def _on_size_changed(self, width: int, height: int):
-        for act in self.size_group.actions():
-            # Check if text matches preset dimensions
-            dim_str = f"{width} × {height}"
-            act.setChecked(dim_str in act.text())
-
-    def _on_sync_offset_changed(self, offset: float):
-        for act in self.offset_group.actions():
-            dim = f"({offset:+.1f}s)" if offset != 0.0 else "(0.0s)"
-            act.setChecked(dim in act.text())
-
-    def _on_opacity_changed(self, active: float, next_op: float, prev_op: float):
-        for act in self.opacity_group.actions():
-            matched = False
-            for label, a_val, n_val, p_val in OPACITY_PRESETS:
-                if act.text() == label:
-                    matched = (
-                        abs(active - a_val) < 0.01 and
-                        abs(next_op - n_val) < 0.01 and
-                        abs(prev_op - p_val) < 0.01
-                    )
-                    break
-            act.setChecked(matched)
-
-    def _on_uncensored_changed(self, prefer: bool):
-        if self.uncensored_action.isChecked() != prefer:
-            self.uncensored_action.setChecked(prefer)
 
     def _toggle_visibility(self, visible: bool):
         if visible:

@@ -26,8 +26,8 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 APPDATA_DIR = Path(os.environ.get("APPDATA", ".")) / "TransparentLyrics"
 
 
-def parse_simple_yaml(text: str) -> Dict[str, Any]:
-    """Lightweight zero-dependency YAML parser for key-value configuration."""
+def _parse_legacy_yaml(text: str) -> Dict[str, Any]:
+    """Lightweight backward-compatibility parser for legacy YAML settings files."""
     data: Dict[str, Any] = {}
     for line in text.splitlines():
         line = line.strip()
@@ -36,7 +36,7 @@ def parse_simple_yaml(text: str) -> Dict[str, Any]:
         if ":" in line:
             parts = line.split(":", 1)
             key = parts[0].strip()
-            val = parts[1].split("#")[0].strip()  # Remove inline comments
+            val = parts[1].split("#")[0].strip()
             if not val:
                 continue
             if val.lower() == "true":
@@ -58,100 +58,91 @@ def parse_simple_yaml(text: str) -> Dict[str, Any]:
     return data
 
 
-def dump_annotated_yaml(data: Dict[str, Any]) -> str:
-    """Formats a human-readable annotated YAML file."""
-    lines = [
-        "# ========================================================\n",
-        "# Transparent Live Lyrics Overlay - User Settings (YAML)\n",
-        "# This file is automatically updated whenever settings change.\n",
-        "# You can also edit it directly in Notepad and click 'Reload Settings'.\n",
-        "# ========================================================\n\n",
-        "# --- Window Geometry ---\n",
-        f"pos_x: {data.get('pos_x', 100)}\n",
-        f"pos_y: {data.get('pos_y', 100)}\n",
-        f"width: {data.get('width', 960)}\n",
-        f"height: {data.get('height', 220)}\n\n",
-        "# --- Behavior & Layout ---\n",
-        f"is_locked: {'true' if data.get('is_locked', False) else 'false'}  # Click-through mode\n",
-        f"theme: \"{data.get('theme', 'Minimalist')}\"  # Minimalist, Cyberpunk, Sunset, Emerald\n",
-        f"album_cover_mode: \"{data.get('album_cover_mode', 'off')}\"  # off, left, right\n",
-        f"prefer_uncensored: {'true' if data.get('prefer_uncensored', True) else 'false'}  # Prioritize uncensored lyrics (LRCLIB)\n",
-        f"sync_offset: {data.get('sync_offset', 0.0)}  # In seconds (e.g. +0.5 earlier, -0.5 later)\n\n",
-        "# --- Opacity Levels (0.0 to 1.0) ---\n",
-        f"active_opacity: {data.get('active_opacity', 1.0)}  # Active line (1.0 = 100%)\n",
-        f"next_opacity: {data.get('next_opacity', 0.50)}  # Next line (0.50 = 50%)\n",
-        f"prev_opacity: {data.get('prev_opacity', 0.25)}  # Previous line (0.25 = 25%)\n\n",
-        "# --- Typography ---\n",
-        f"font_family: \"{data.get('font_family', 'Segoe UI')}\"\n",
-        f"active_font_size: {data.get('active_font_size', 22)}\n",
-        f"context_font_size: {data.get('context_font_size', 15)}\n",
-    ]
-    return "".join(lines)
-
-
 class ConfigManager:
-    """Manages persistent user configuration with dual YAML and JSON automatic saving."""
+    """Manages persistent user configuration via a single settings.json file with automatic legacy migration."""
 
-    def __init__(self):
+    def __init__(self, root_dir: Optional[Path] = None, appdata_dir: Optional[Path] = None):
         self.config = DEFAULT_CONFIG.copy()
 
-        # Decide primary target paths
-        self.local_json = PROJECT_ROOT / "settings.json"
-        self.local_yaml = PROJECT_ROOT / "settings.yaml"
+        self.root_dir = Path(root_dir) if root_dir else PROJECT_ROOT
+        self.appdata_dir = Path(appdata_dir) if appdata_dir else APPDATA_DIR
 
-        self.appdata_json = APPDATA_DIR / "settings.json"
-        self.appdata_yaml = APPDATA_DIR / "settings.yaml"
+        self.local_json = self.root_dir / "settings.json"
+        self.appdata_json = self.appdata_dir / "settings.json"
+
+        # Legacy file paths for migration
+        self.legacy_local_yaml = self.root_dir / "settings.yaml"
+        self.legacy_appdata_yaml = self.appdata_dir / "settings.yaml"
+        self.legacy_appdata_json = self.appdata_dir / "config.json"
 
         self.load()
-
-    def get_preferred_yaml_path(self) -> Path:
-        return self.local_yaml if self.local_yaml.exists() else self.appdata_yaml
 
     def get_preferred_json_path(self) -> Path:
         return self.local_json if self.local_json.exists() else self.appdata_json
 
     def load(self):
-        """Loads configuration from YAML or JSON (local project prioritized over AppData)."""
-        candidate_files = [
-            self.local_yaml,
-            self.local_json,
-            self.appdata_yaml,
-            self.appdata_json,
-            # Legacy fallback
-            APPDATA_DIR / "config.json",
-        ]
+        """Loads configuration from settings.json and automatically migrates legacy settings if present."""
+        loaded_from_json = False
 
-        for file_path in candidate_files:
+        # 1. Primary: load existing settings.json
+        for file_path in [self.local_json, self.appdata_json]:
             if file_path.exists():
                 try:
                     content = file_path.read_text(encoding="utf-8")
-                    if file_path.suffix.lower() in (".yaml", ".yml"):
-                        loaded = parse_simple_yaml(content)
-                    else:
-                        loaded = json.loads(content)
-
-                    if loaded and isinstance(loaded, dict):
+                    loaded = json.loads(content)
+                    if isinstance(loaded, dict):
                         self.config.update(loaded)
+                        loaded_from_json = True
                         break
                 except Exception as e:
                     print(f"[ConfigManager] Could not load from {file_path}: {e}")
 
+        # 2. Backwards-compatibility: Check and migrate legacy YAML or config.json
+        migrated = False
+        legacy_sources = [
+            (self.legacy_local_yaml, True),
+            (self.legacy_appdata_yaml, True),
+            (self.legacy_appdata_json, False),
+        ]
+
+        for legacy_file, is_yaml in legacy_sources:
+            if legacy_file.exists():
+                try:
+                    content = legacy_file.read_text(encoding="utf-8")
+                    if is_yaml:
+                        legacy_data = _parse_legacy_yaml(content)
+                    else:
+                        legacy_data = json.loads(content)
+
+                    if isinstance(legacy_data, dict) and legacy_data:
+                        self.config.update(legacy_data)
+                        migrated = True
+
+                    # Remove or archive the legacy file once migrated
+                    try:
+                        legacy_file.unlink(missing_ok=True)
+                    except Exception:
+                        pass
+                except Exception as e:
+                    print(f"[ConfigManager] Error migrating legacy file {legacy_file}: {e}")
+
+        # If settings were migrated or settings.json does not yet exist, persist to disk
+        if migrated or not loaded_from_json:
+            self.save()
+
     def save(self):
-        """Automatically saves settings to BOTH settings.yaml and settings.json."""
-        yaml_content = dump_annotated_yaml(self.config)
+        """Saves current settings to settings.json (both local project root and %APPDATA%)."""
         json_content = json.dumps(self.config, indent=4, sort_keys=True)
 
-        # 1. Save in project root directory (portable)
+        # 1. Local project root (portable)
         try:
-            self.local_yaml.write_text(yaml_content, encoding="utf-8")
             self.local_json.write_text(json_content, encoding="utf-8")
         except Exception:
             pass
 
-        # 2. Save in %APPDATA%\TransparentLyrics (persistent backup)
+        # 2. %APPDATA%\TransparentLyrics (persistent backup)
         try:
-            APPDATA_DIR.mkdir(parents=True, exist_ok=True)
-            self.appdata_yaml.write_text(yaml_content, encoding="utf-8")
+            self.appdata_dir.mkdir(parents=True, exist_ok=True)
             self.appdata_json.write_text(json_content, encoding="utf-8")
         except Exception as e:
             print(f"[ConfigManager] Error saving to AppData: {e}")
@@ -159,26 +150,34 @@ class ConfigManager:
     def get(self, key: str, default: Any = None) -> Any:
         return self.config.get(key, default)
 
-    def set(self, key: str, value: Any):
+    def set(self, key: str, value: Any, auto_save: bool = True):
         self.config[key] = value
+        if auto_save:
+            self.save()
+
+    def bulk_set(self, mapping: Dict[str, Any]):
+        """Updates multiple configuration keys at once with a single atomic save."""
+        self.config.update(mapping)
         self.save()
 
-    def open_in_editor(self, fmt: str = "yaml"):
-        """Opens the chosen settings file (YAML or JSON) in the user's default text editor."""
-        self.save()  # Ensure latest state is flushed to disk first
-        target = self.local_yaml if fmt == "yaml" else self.local_json
-        if not target.exists():
-            target = self.appdata_yaml if fmt == "yaml" else self.appdata_json
+    def reset_defaults(self):
+        """Resets all settings back to DEFAULT_CONFIG."""
+        self.config = DEFAULT_CONFIG.copy()
+        self.save()
 
+    def open_in_editor(self):
+        """Opens settings.json in the user's default text editor."""
+        self.save()
+        target = self.get_preferred_json_path()
         try:
             os.startfile(str(target))
         except Exception as e:
             print(f"[ConfigManager] Failed to open editor for {target}: {e}")
 
     def open_folder(self):
-        """Opens the folder containing the settings files in Windows Explorer."""
+        """Opens the folder containing settings.json in Windows Explorer."""
         self.save()
-        target_dir = PROJECT_ROOT if self.local_yaml.exists() else APPDATA_DIR
+        target_dir = PROJECT_ROOT if self.local_json.exists() else APPDATA_DIR
         try:
             os.startfile(str(target_dir))
         except Exception as e:

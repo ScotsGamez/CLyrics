@@ -306,6 +306,52 @@ class OverlayWindow(QWidget):
         self.opacity_changed.emit(active_op, next_op, prev_op)
         self.uncensored_changed.emit(bool(self.config.get("prefer_uncensored", True)))
 
+    def open_settings_dialog(self):
+        """Opens the dedicated graphical Settings Dialog window."""
+        from .settings_dialog import SettingsDialog
+        if not hasattr(self, "_settings_dialog") or self._settings_dialog is None:
+            self._settings_dialog = SettingsDialog(self.config, self)
+            self._settings_dialog.settings_applied.connect(self._on_settings_applied)
+
+        self._settings_dialog.load_from_config()
+        self._settings_dialog.show()
+        self._settings_dialog.raise_()
+        self._settings_dialog.activateWindow()
+
+    def _on_settings_applied(self, settings: dict):
+        """Applies newly saved settings from SettingsDialog cleanly without menu deadlocks."""
+        # Geometry
+        w = settings.get("width", self.width())
+        h = settings.get("height", self.height())
+        if w != self.width() or h != self.height():
+            self.set_window_dimensions(w, h)
+
+        # Theme
+        if "theme" in settings:
+            self.apply_theme(settings["theme"])
+
+        # Album Cover Art
+        if "album_cover_mode" in settings:
+            self.set_album_cover_mode(settings["album_cover_mode"], adjust_ratio=False)
+
+        # 3-Tier Opacity
+        active = float(settings.get("active_opacity", 1.0))
+        next_op = float(settings.get("next_opacity", 0.50))
+        prev_op = float(settings.get("prev_opacity", 0.25))
+        self.set_opacities(active, next_op, prev_op)
+
+        # Lock mode
+        if "is_locked" in settings:
+            self.set_locked(settings["is_locked"])
+
+        # Sync offset
+        if "sync_offset" in settings:
+            self.set_sync_offset(settings["sync_offset"])
+
+        # Uncensored lyrics
+        if "prefer_uncensored" in settings:
+            self.set_prefer_uncensored(settings["prefer_uncensored"])
+
     def contextMenuEvent(self, event):
         if self.is_locked:
             return
@@ -341,111 +387,18 @@ class OverlayWindow(QWidget):
         center_act = menu.addAction("↺ Center on Screen")
         center_act.triggered.connect(self.center_on_screen)
 
-        # 1. Album Cover Submenu
-        album_menu = menu.addMenu("🖼 Album Cover")
-        album_group = QActionGroup(album_menu)
-        curr_album_mode = self.config.get("album_cover_mode", "off")
+        menu.addSeparator()
 
-        for mode_id, mode_label in [("off", "Off / Hidden"), ("left", "Left Side"), ("right", "Right Side")]:
-            act = QAction(mode_label, album_menu, checkable=True)
-            act.setChecked(curr_album_mode == mode_id)
-            act.triggered.connect(lambda checked, m=mode_id: self.set_album_cover_mode(m))
-            album_group.addAction(act)
-            album_menu.addAction(act)
-
-        # 2. Window Size Submenu
-        size_menu = menu.addMenu("📏 Window Size")
-        size_group = QActionGroup(size_menu)
-        for label, w, h in SIZE_PRESETS:
-            act = QAction(label, size_menu, checkable=True)
-            act.setChecked(self.width() == w and self.height() == h)
-            act.triggered.connect(lambda checked, w=w, h=h: self.set_window_dimensions(w, h))
-            size_group.addAction(act)
-            size_menu.addAction(act)
-
-        size_menu.addSeparator()
-        custom_act = size_menu.addAction("Custom Dimensions...")
-        custom_act.triggered.connect(self.prompt_custom_size)
-
-        # 3. Themes Submenu
-        theme_menu = menu.addMenu("🎨 Themes")
-        current_theme = self.config.get("theme", "Minimalist")
-        theme_group = QActionGroup(theme_menu)
-
-        for name in THEMES.keys():
-            act = QAction(name, theme_menu, checkable=True)
-            act.setChecked(name == current_theme)
-            act.triggered.connect(lambda checked, n=name: self.apply_theme(n))
-            theme_group.addAction(act)
-            theme_menu.addAction(act)
-
-        # 4. Opacity Submenu
-        opacity_menu = menu.addMenu("👁 Opacity")
-        opacity_group = QActionGroup(opacity_menu)
-        curr_act = float(self.config.get("active_opacity", 1.0))
-        curr_next = float(self.config.get("next_opacity", 0.50))
-        curr_prev = float(self.config.get("prev_opacity", 0.25))
-
-        for label, a_val, n_val, p_val in OPACITY_PRESETS:
-            act = QAction(label, opacity_menu, checkable=True)
-            matched = (
-                abs(curr_act - a_val) < 0.01 and
-                abs(curr_next - n_val) < 0.01 and
-                abs(curr_prev - p_val) < 0.01
-            )
-            act.setChecked(matched)
-            act.triggered.connect(lambda checked, a=a_val, n=n_val, p=p_val: self.set_opacities(a, n, p))
-            opacity_group.addAction(act)
-            opacity_menu.addAction(act)
-
-        opacity_menu.addSeparator()
-        custom_op_act = opacity_menu.addAction("Custom Opacities...")
-        custom_op_act.triggered.connect(self.prompt_custom_opacities)
-
-        # 5. Sync Offset Submenu
-        offset_menu = menu.addMenu("⏱ Sync Offset")
-        offset_group = QActionGroup(offset_menu)
-        curr_offset = float(self.config.get("sync_offset", 0.0))
-
-        OFFSET_PRESETS = [
-            ("No Offset (0.0s)", 0.0),
-            ("+0.5s Earlier", 0.5),
-            ("+1.0s Earlier", 1.0),
-            ("+2.0s Earlier", 2.0),
-            ("-0.5s Later", -0.5),
-            ("-1.0s Later", -1.0),
-            ("-2.0s Later", -2.0),
-        ]
-        for label, val in OFFSET_PRESETS:
-            act = QAction(label, offset_menu, checkable=True)
-            act.setChecked(abs(curr_offset - val) < 0.01)
-            act.triggered.connect(lambda checked, v=val: self.set_sync_offset(v))
-            offset_group.addAction(act)
-            offset_menu.addAction(act)
-
-        offset_menu.addSeparator()
-        custom_off_act = offset_menu.addAction("Custom Offset...")
-        custom_off_act.triggered.connect(self.prompt_custom_offset)
-
-        # 6. Uncensored Lyrics Toggle
-        uncensored_act = QAction("🔞 Prefer Uncensored Lyrics", menu, checkable=True)
-        uncensored_act.setChecked(bool(self.config.get("prefer_uncensored", True)))
-        uncensored_act.triggered.connect(self.set_prefer_uncensored)
-        menu.addAction(uncensored_act)
-
-        # 7. Settings Submenu
-        settings_menu = menu.addMenu("⚙ Settings")
-        settings_menu.addAction("📄 Edit settings.yaml...", lambda: self.config.open_in_editor("yaml"))
-        settings_menu.addAction("📄 Edit settings.json...", lambda: self.config.open_in_editor("json"))
-        settings_menu.addAction("📁 Open Settings Folder...", self.config.open_folder)
-        settings_menu.addSeparator()
-        settings_menu.addAction("🔄 Reload Settings from File", self.reload_settings)
+        settings_act = menu.addAction("⚙ Settings...")
+        settings_act.triggered.connect(self.open_settings_dialog)
 
         menu.addSeparator()
+
         shortcut_act = menu.addAction("🔗 Create Desktop Shortcut")
         shortcut_act.triggered.connect(self._create_desktop_shortcut)
 
         menu.addSeparator()
+
         exit_act = menu.addAction("✕ Exit")
         exit_act.triggered.connect(QGuiApplication.quit)
 
