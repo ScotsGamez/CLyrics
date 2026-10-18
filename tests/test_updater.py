@@ -57,7 +57,7 @@ class TestUpdater(unittest.TestCase):
     def test_get_current_repo_name(self):
         from transparent_lyrics.updater import get_current_repo_name
         name = get_current_repo_name()
-        self.assertEqual(name, "Clyrics")
+        self.assertEqual(name, "CLyrics")
 
     def test_check_and_update_desktop_shortcut(self):
         import tempfile
@@ -66,9 +66,9 @@ class TestUpdater(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as tmp_desktop:
             with patch.dict("os.environ", {"USERPROFILE": tmp_desktop}):
-                with patch("transparent_lyrics.updater.get_current_repo_name", return_value="Clyrics"):
+                with patch("transparent_lyrics.updater.get_current_repo_name", return_value="CLyrics"):
                     with patch("subprocess.run") as mock_run:
-                        # Should detect missing Clyrics.lnk and trigger create_shortcut.ps1
+                        # Should detect missing CLyrics.lnk and trigger create_shortcut.ps1
                         updated = check_and_update_desktop_shortcut()
                         self.assertTrue(updated)
                         mock_run.assert_called_once()

@@ -298,7 +298,7 @@ def main():
     )
 
     app = QApplication(sys.argv)
-    app.setApplicationName("Clyrics")
+    app.setApplicationName("CLyrics")
     app.setOrganizationName("ScotsGamez")
     app.setQuitOnLastWindowClosed(False)
 

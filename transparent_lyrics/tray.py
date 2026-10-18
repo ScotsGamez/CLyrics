@@ -65,7 +65,7 @@ class LyricsTrayIcon(QSystemTrayIcon):
         super().__init__(create_tray_icon(), parent)
         self.window = overlay_window
 
-        self.setToolTip("Clyrics - Clear Lyrics")
+        self.setToolTip("CLyrics (C (See) Lyrics)")
         self._init_menu()
 
         # Connect overlay state signals
@@ -149,7 +149,7 @@ class LyricsTrayIcon(QSystemTrayIcon):
     def _check_updates(self):
         from .updater import UpdateCheckerThread, prompt_update_confirmation, launch_update_bat_and_exit
         from . import __version__
-        self.showMessage("Transparent Live Lyrics", "Checking for updates...", QSystemTrayIcon.Information, 2000)
+        self.showMessage("CLyrics", "Checking for updates...", QSystemTrayIcon.Information, 2000)
         self._tray_upd_thread = UpdateCheckerThread(__version__, self)
 
         def on_avail(ver, notes, url):
@@ -159,10 +159,10 @@ class LyricsTrayIcon(QSystemTrayIcon):
                 launch_update_bat_and_exit(shutdown_fn)
 
         def on_none(ver):
-            self.showMessage("Transparent Live Lyrics", f"You are running the latest version ({ver}).", QSystemTrayIcon.Information, 3000)
+            self.showMessage("CLyrics", f"You are running the latest version ({ver}).", QSystemTrayIcon.Information, 3000)
 
         def on_err(err):
-            self.showMessage("Transparent Live Lyrics", f"Update check failed: {err}", QSystemTrayIcon.Warning, 3000)
+            self.showMessage("CLyrics", f"Update check failed: {err}", QSystemTrayIcon.Warning, 3000)
 
         self._tray_upd_thread.update_available.connect(on_avail)
         self._tray_upd_thread.no_update.connect(on_none)
@@ -175,7 +175,7 @@ class LyricsTrayIcon(QSystemTrayIcon):
         script = Path(__file__).resolve().parent.parent / "scripts" / "create_shortcut.ps1"
         try:
             subprocess.run(["powershell.exe", "-ExecutionPolicy", "Bypass", "-NoProfile", "-File", str(script)], check=True)
-            self.showMessage("Transparent Live Lyrics", "Desktop shortcut created successfully!", QSystemTrayIcon.Information, 3000)
+            self.showMessage("CLyrics", "Desktop shortcut created successfully!", QSystemTrayIcon.Information, 3000)
         except Exception as e:
             print(f"[Tray] Error creating shortcut: {e}")
 
@@ -199,7 +199,7 @@ class LyricsTrayIcon(QSystemTrayIcon):
             if artist:
                 text += f" - {artist}"
             self.header_action.setText(text[:36])
-            self.setToolTip(f"Lyrics Overlay: {text}")
+            self.setToolTip(f"CLyrics: {text}")
         else:
             self.header_action.setText("Ready for Music")
-            self.setToolTip("Transparent Live Lyrics Overlay (Idle)")
+            self.setToolTip("CLyrics (Idle)")

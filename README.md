@@ -1,4 +1,4 @@
-# 🎵 Clyrics (Clear Lyrics) — Transparent Live Lyrics Overlay
+# 🎵 CLyrics (C (See) Lyrics) — Transparent Live Lyrics Overlay
 
 [![Platform](https://img.shields.io/badge/Platform-Windows%2010%20%7C%2011-0078D6?style=for-the-badge&logo=windows)](https://github.com/ScotsGamez/Clyrics)
 [![Python](https://img.shields.io/badge/Python-3.10+-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
@@ -18,9 +18,8 @@ A lightweight, hardware-independent, **100% transparent live lyrics overlay** fo
   - Immediate atomic saves with zero window freezing or menu deadlocks.
 - **Uncluttered & Clean Menus**:
   - The System Tray and right-click context menus are streamlined to only essential actions, eliminating confusing deep nested submenus.
-- **Single `settings.json` Storage & Automatic Migration**:
-  - Replaced legacy dual-file YAML/JSON with a clean, single `settings.json`.
-  - Automatically detects, imports, and migrates previous `settings.yaml` configurations with zero data loss.
+- **Single `settings.json` Storage & Automatic Defaults**:
+  - Automatically loads full default settings on first launch and saves to `settings.json`.
 - **3-Line Continuous Smooth Scrolling Karaoke View**:
   - **Previous Line**: Gracefully recessed context line with configurable opacity (default 25%).
   - **Active Line**: Prominent, high-opacity, emphasized text (default 100%).
@@ -55,7 +54,7 @@ A lightweight, hardware-independent, **100% transparent live lyrics overlay** fo
 - **System Tray Recovery Controller**: A persistent taskbar notification tray icon lets you lock, unlock, resize, toggle album art, switch themes, or exit at any time—even while clicks are passing through.
 - **Intelligent Song Lifecycle**:
   - Automatically queries Windows GSMTC (Global System Media Transport Controls).
-  - Fast synchronized `.lrc` lyrics fetching with in-memory caching.
+  - Fast synchronized `.lrc` lyrics fetching with 5-song rolling local cache.
   - Automatic `(Intro)` and `(Instrumental)` interlude detection.
   - Graceful notification and fade-out if no synchronized lyrics exist for a track.
 - **Extensible Theme System**: Switch between built-in themes on the fly:
@@ -83,12 +82,12 @@ cd Clyrics
 
 Double-click **`setup.bat`**:
 - Installs all dependencies (`pip install -r requirements.txt`).
-- Automatically creates a sleek **Transparent Live Lyrics** shortcut directly on your Windows Desktop!
+- Automatically creates a sleek **CLyrics** shortcut directly on your Windows Desktop!
 
 ### 2. Launching
 
-- **From Desktop**: Double-click the **Transparent Live Lyrics** desktop shortcut.
-- **From Folder**: Double-click `Launch_Transparent_Lyrics.bat` (runs silently with zero command prompt box).
+- **From Desktop**: Double-click the **CLyrics** desktop shortcut.
+- **From Folder**: Double-click `launch.bat` (runs silently with zero command prompt box).
 - **Via Terminal**:
   ```powershell
   python run.py
@@ -146,9 +145,12 @@ flowchart TD
 ### Directory Structure
 
 ```
-transparent-lyrics-overlay/
+CLyrics/
 ├── .gitignore
-├── Launch_Transparent_Lyrics.bat    # Zero-console Windows batch launcher
+├── launch.bat                       # Zero-console Windows batch launcher
+├── update.bat                       # Automatic updater script
+├── setup.bat                        # First-time dependency installer
+├── Create_Desktop_Shortcut.bat      # Desktop shortcut generator
 ├── README.md
 ├── requirements.txt
 ├── run.py                           # Application entry point
@@ -159,23 +161,28 @@ transparent-lyrics-overlay/
 │   ├── test_artwork_service.py
 │   ├── test_config.py
 │   ├── test_integration.py
+│   ├── test_lrc_cache.py
 │   ├── test_lyrics_service.py
+│   ├── test_media_service.py
 │   ├── test_renderer.py
 │   ├── test_settings_dialog.py
 │   ├── test_smooth_time_tracker.py
-│   └── test_themes.py
+│   ├── test_themes.py
+│   └── test_updater.py
 └── transparent_lyrics/
     ├── __init__.py
     ├── app.py                       # Master controller & lifecycle coordinator
     ├── artwork_service.py           # Deezer/iTunes artwork fetcher & cacher
-    ├── config.py                    # Persistent JSON settings & legacy migration
+    ├── config.py                    # Persistent JSON settings manager
+    ├── lrc_cache.py                 # Rolling 5-song LRCLIB cache
     ├── lyrics_service.py            # Asynchronous LRC fetching & matching
     ├── media_service.py             # GSMTC background worker process
     ├── overlay_window.py            # Translucent window & Win32 click-through handler
     ├── renderer.py                  # 3-line animated smooth-scrolling painter
     ├── settings_dialog.py           # Dedicated graphical settings GUI window
     ├── themes.py                    # Color palettes and typography presets
-    └── tray.py                      # Clean system tray icon & menu
+    ├── tray.py                      # Clean system tray icon & menu
+    └── updater.py                   # Automatic GitHub release checker
 ```
 
 ---

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Transparent Live Lyrics Overlay
+CLyrics (C (See) Lyrics)
 Launcher script.
 """
 import sys

@@ -21,7 +21,7 @@ def parse_version(v_str: str) -> Tuple[int, ...]:
 
 
 def get_current_repo_name() -> str:
-    """Retrieves current repository name from git remote or defaults to 'Clyrics'."""
+    """Retrieves current repository name from git remote or defaults to 'CLyrics'."""
     try:
         out = subprocess.check_output(
             ["git", "config", "--get", "remote.origin.url"],
@@ -33,15 +33,15 @@ def get_current_repo_name() -> str:
         if name.endswith(".git"):
             name = name[:-4]
         if name:
-            return name
+            return "CLyrics" if name.lower() == "clyrics" else name
     except Exception:
         pass
-    return "Clyrics"
+    return "CLyrics"
 
 
 def check_and_update_desktop_shortcut(force: bool = False) -> bool:
     """
-    Checks if the desktop shortcut matches the repository name (e.g. Clyrics.lnk)
+    Checks if the desktop shortcut matches the repository name (e.g. CLyrics.lnk)
     and ensures it is up to date with the latest icon and executable paths.
     Removes legacy shortcuts and refreshes the shortcut.
     """
@@ -56,6 +56,7 @@ def check_and_update_desktop_shortcut(force: bool = False) -> bool:
     legacy_shortcuts = [
         desktop / "Transparent Live Lyrics.lnk",
         desktop / "Transparent Lyrics.lnk",
+        desktop / "Clyrics.lnk",
     ]
 
     for leg in legacy_shortcuts:
@@ -125,8 +126,8 @@ class UpdateCheckerThread(QThread):
 def prompt_update_confirmation(remote_ver: str, release_notes: str = "", parent=None) -> bool:
     """Shows a confirmation dialog for applying an available update."""
     msg = QMessageBox(parent)
-    msg.setWindowTitle("Update Available")
-    msg.setText(f"A new version of Transparent Live Lyrics is available: <b>{remote_ver}</b>")
+    msg.setWindowTitle("CLyrics — Update Available")
+    msg.setText(f"A new version of CLyrics is available: <b>{remote_ver}</b>")
     preview = release_notes.strip()[:400] + ("..." if len(release_notes.strip()) > 400 else "")
     if preview:
         msg.setInformativeText(f"<b>What's New:</b>\n{preview}\n\nWould you like to update now? The app will close, run update.bat, and restart automatically.")
@@ -145,10 +146,10 @@ def prompt_first_run_update_check(config_manager, parent=None):
         return
 
     msg = QMessageBox(parent)
-    msg.setWindowTitle("Transparent Live Lyrics — Updates")
+    msg.setWindowTitle("CLyrics — Automatic Updates")
     msg.setText("<b>Automatic Update Checking</b>")
     msg.setInformativeText(
-        "Transparent Live Lyrics can periodically check for new updates and bugfixes on startup.<br><br>"
+        "CLyrics (C (See) Lyrics) can periodically check for new updates and bugfixes on startup.<br><br>"
         "This feature is <b>turned OFF by default</b>.<br><br>"
         "Would you like to turn on automatic update checking?"
     )
@@ -178,8 +179,6 @@ def launch_update_bat_and_exit(app_shutdown_callback=None):
             print(f"[Updater] Error in shutdown callback: {e}")
 
     bat_file = PROJECT_ROOT / "update.bat"
-    if not bat_file.exists():
-        bat_file = PROJECT_ROOT / "Update_Transparent_Lyrics.bat"
 
     if sys.platform == "win32":
         creationflags = getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0x00000200) | getattr(subprocess, "CREATE_NEW_CONSOLE", 0x00000010)

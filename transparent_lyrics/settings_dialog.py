@@ -23,7 +23,7 @@ from .overlay_window import SIZE_PRESETS, OPACITY_PRESETS
 
 
 class SettingsDialog(QDialog):
-    """Dedicated dark-themed graphical configuration manager for Transparent Live Lyrics."""
+    """Dedicated dark-themed graphical configuration manager for CLyrics (C (See) Lyrics)."""
 
     settings_applied = Signal(dict)
     restart_requested = Signal()
@@ -31,7 +31,7 @@ class SettingsDialog(QDialog):
     def __init__(self, config_manager: ConfigManager, parent=None):
         super().__init__(parent)
         self.config = config_manager
-        self.setWindowTitle("Transparent Live Lyrics — Settings")
+        self.setWindowTitle("CLyrics — Settings")
         self.setMinimumSize(540, 520)
         self.resize(560, 560)
 

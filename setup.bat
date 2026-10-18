@@ -1,9 +1,9 @@
 @echo off
-title Setup - Transparent Live Lyrics Overlay
+title Setup - CLyrics (C (See) Lyrics)
 cd /d "%~dp0"
 
 echo ========================================================
-echo   Transparent Live Lyrics Overlay - Quick Setup
+echo   CLyrics (C (See) Lyrics) - Quick Setup
 echo ========================================================
 echo.
 
@@ -24,7 +24,7 @@ echo.
 echo ========================================================
 echo   Setup Complete!
 echo   You can launch the overlay anytime from your Desktop
-echo   shortcut or by running Launch_Transparent_Lyrics.bat.
+echo   shortcut or by running launch.bat.
 echo ========================================================
 echo.
 pause

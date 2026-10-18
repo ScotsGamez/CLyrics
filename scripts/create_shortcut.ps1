@@ -14,7 +14,9 @@ if (-not $ShortcutName) {
     } catch {}
 }
 if (-not $ShortcutName) {
-    $ShortcutName = "Clyrics"
+    $ShortcutName = "CLyrics"
+} elseif ($ShortcutName.ToLower() -eq "clyrics") {
+    $ShortcutName = "CLyrics"
 }
 
 $WshShell = New-Object -ComObject WScript.Shell
@@ -22,11 +24,13 @@ $Desktop = [System.Environment]::GetFolderPath('Desktop')
 $ShortcutPath = Join-Path $Desktop "$ShortcutName.lnk"
 
 # Clean up any legacy differently named shortcuts
-$LegacyNames = @("Transparent Live Lyrics.lnk", "Transparent Lyrics.lnk")
+$LegacyNames = @("Transparent Live Lyrics.lnk", "Transparent Lyrics.lnk", "Clyrics.lnk")
 foreach ($legacy in $LegacyNames) {
-    $legacyPath = Join-Path $Desktop $legacy
-    if ((Test-Path $legacyPath) -and ($legacyPath -ne $ShortcutPath)) {
-        Remove-Item $legacyPath -Force -ErrorAction SilentlyContinue
+    if ($legacy -cne "$ShortcutName.lnk") {
+        $legacyPath = Join-Path $Desktop $legacy
+        if (Test-Path $legacyPath) {
+            Remove-Item $legacyPath -Force -ErrorAction SilentlyContinue
+        }
     }
 }
 
@@ -48,7 +52,7 @@ $IconPath = Join-Path $TargetDir "assets\icon.ico"
 if (Test-Path $IconPath) {
     $Shortcut.IconLocation = "$IconPath, 0"
 }
-$Shortcut.Description = "$ShortcutName - 100% Transparent Live Lyrics Overlay"
+$Shortcut.Description = "CLyrics (C (See) Lyrics) - 100% Transparent Live Lyrics Overlay"
 $Shortcut.Save()
 
 # Notify Windows Explorer of shell/icon change
