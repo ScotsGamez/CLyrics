@@ -39,10 +39,11 @@ def get_current_repo_name() -> str:
     return "Clyrics"
 
 
-def check_and_update_desktop_shortcut() -> bool:
+def check_and_update_desktop_shortcut(force: bool = False) -> bool:
     """
-    Checks if the desktop shortcut matches the repository name (e.g. Clyrics.lnk).
-    If outdated or missing, removes legacy shortcuts and creates/updates the correct shortcut.
+    Checks if the desktop shortcut matches the repository name (e.g. Clyrics.lnk)
+    and ensures it is up to date with the latest icon and executable paths.
+    Removes legacy shortcuts and refreshes the shortcut.
     """
     repo_name = get_current_repo_name()
     desktop = Path(os.environ.get("USERPROFILE", "")) / "Desktop"
@@ -57,17 +58,14 @@ def check_and_update_desktop_shortcut() -> bool:
         desktop / "Transparent Lyrics.lnk",
     ]
 
-    needs_update = not expected_shortcut.exists()
-
     for leg in legacy_shortcuts:
         if leg.exists() and leg != expected_shortcut:
             try:
                 leg.unlink()
-                needs_update = True
             except Exception as e:
                 print(f"[Updater] Error removing legacy shortcut {leg}: {e}")
 
-    if needs_update and sys.platform == "win32":
+    if sys.platform == "win32":
         script = PROJECT_ROOT / "scripts" / "create_shortcut.ps1"
         if script.exists():
             try:

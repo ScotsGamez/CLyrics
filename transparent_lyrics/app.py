@@ -296,9 +296,14 @@ def main():
     )
 
     app = QApplication(sys.argv)
-    app.setApplicationName("TransparentLyrics")
+    app.setApplicationName("Clyrics")
     app.setOrganizationName("ScotsGamez")
     app.setQuitOnLastWindowClosed(False)
+
+    from .tray import create_tray_icon
+    app_icon = create_tray_icon()
+    if not app_icon.isNull():
+        app.setWindowIcon(app_icon)
 
     controller = TransparentLyricsApp()
 

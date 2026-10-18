@@ -4,7 +4,22 @@ from PySide6.QtWidgets import QSystemTrayIcon, QMenu
 
 
 def create_tray_icon() -> QIcon:
-    """Generates a high-DPI musical note tray icon procedurally."""
+    """Generates a high-DPI musical note tray icon procedurally or loads brand icon."""
+    try:
+        from .config import PROJECT_ROOT
+        icon_path = PROJECT_ROOT / "assets" / "icon.ico"
+        if icon_path.exists():
+            icon = QIcon(str(icon_path))
+            if not icon.isNull():
+                return icon
+        logo_path = PROJECT_ROOT / "assets" / "logo.png"
+        if logo_path.exists():
+            icon = QIcon(str(logo_path))
+            if not icon.isNull():
+                return icon
+    except Exception:
+        pass
+
     size = 64
     pixmap = QPixmap(size, size)
     pixmap.fill(Qt.transparent)
@@ -50,7 +65,7 @@ class LyricsTrayIcon(QSystemTrayIcon):
         super().__init__(create_tray_icon(), parent)
         self.window = overlay_window
 
-        self.setToolTip("Transparent Live Lyrics Overlay")
+        self.setToolTip("Clyrics - Clear Lyrics")
         self._init_menu()
 
         # Connect overlay state signals

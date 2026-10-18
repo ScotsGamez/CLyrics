@@ -20,6 +20,10 @@ echo Checking and updating Python dependencies...
 pip install -r requirements.txt
 
 echo.
+echo Refreshing desktop shortcut...
+powershell -ExecutionPolicy Bypass -NoProfile -File "scripts\create_shortcut.ps1"
+
+echo.
 echo ========================================================
 echo   Update successfully completed!
 echo   Relaunching Transparent Live Lyrics...

@@ -51,4 +51,9 @@ if (Test-Path $IconPath) {
 $Shortcut.Description = "$ShortcutName - 100% Transparent Live Lyrics Overlay"
 $Shortcut.Save()
 
+# Notify Windows Explorer of shell/icon change
+try {
+    Start-Process -FilePath "ie4uinit.exe" -ArgumentList "-show" -WindowStyle Hidden -ErrorAction SilentlyContinue
+} catch {}
+
 Write-Host "Created desktop shortcut at: $ShortcutPath" -ForegroundColor Green
