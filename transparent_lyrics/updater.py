@@ -10,7 +10,7 @@ from PySide6.QtCore import QObject, Signal, QThread
 from PySide6.QtWidgets import QMessageBox, QApplication
 from .config import PROJECT_ROOT
 
-GITHUB_API_LATEST_RELEASE = "https://api.github.com/repos/ScotsGamez/transparent-lyrics-overlay/releases/latest"
+GITHUB_API_LATEST_RELEASE = "https://api.github.com/repos/ScotsGamez/Clyrics/releases/latest"
 
 
 def parse_version(v_str: str) -> Tuple[int, ...]:

@@ -1,6 +1,6 @@
-# 🎵 Transparent Live Lyrics Overlay
+# 🎵 Clyrics (Clear Lyrics) — Transparent Live Lyrics Overlay
 
-[![Platform](https://img.shields.io/badge/Platform-Windows%2010%20%7C%2011-0078D6?style=for-the-badge&logo=windows)](https://github.com/ScotsGamez/transparent-lyrics-overlay)
+[![Platform](https://img.shields.io/badge/Platform-Windows%2010%20%7C%2011-0078D6?style=for-the-badge&logo=windows)](https://github.com/ScotsGamez/Clyrics)
 [![Python](https://img.shields.io/badge/Python-3.10+-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
 [![GUI](https://img.shields.io/badge/GUI-PySide6%20%2F%20Qt-41CD52?style=for-the-badge&logo=qt&logoColor=white)](https://pypi.org/project/PySide6/)
 [![License](https://img.shields.io/badge/License-MIT-blue?style=for-the-badge)](LICENSE)
@@ -77,8 +77,8 @@ A lightweight, hardware-independent, **100% transparent live lyrics overlay** fo
 ### 1. Clone & Setup
 
 ```powershell
-git clone https://github.com/ScotsGamez/transparent-lyrics-overlay.git
-cd transparent-lyrics-overlay
+git clone https://github.com/ScotsGamez/Clyrics.git
+cd Clyrics
 ```
 
 Double-click **`setup.bat`**:
