@@ -104,6 +104,10 @@ class OverlayWindow(QWidget):
         prev_op = float(self.config.get("prev_opacity", 0.25))
         self.renderer.set_opacities(active_op, next_op, prev_op)
 
+        # Load High-Contrast Outline
+        contrast = bool(self.config.get("high_contrast_outline", False))
+        self.renderer.set_high_contrast_outline(contrast)
+
         # Apply initial lock state
         init_locked = self.config.get("is_locked", False)
         self.set_locked(init_locked)
@@ -306,6 +310,7 @@ class OverlayWindow(QWidget):
         self.renderer.set_opacities(active_op, next_op, prev_op)
         self.opacity_changed.emit(active_op, next_op, prev_op)
         self.uncensored_changed.emit(bool(self.config.get("prefer_uncensored", True)))
+        self.renderer.set_high_contrast_outline(bool(self.config.get("high_contrast_outline", False)))
 
     def open_settings_dialog(self):
         """Opens the dedicated graphical Settings Dialog window."""

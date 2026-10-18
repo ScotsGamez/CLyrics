@@ -114,6 +114,9 @@ class LyricsTrayIcon(QSystemTrayIcon):
         self.settings_action = self.menu.addAction("⚙ Settings...")
         self.settings_action.triggered.connect(self.window.open_settings_dialog)
 
+        update_act = self.menu.addAction("🔄 Check for Updates...")
+        update_act.triggered.connect(self._check_updates)
+
         self.menu.addSeparator()
 
         # Desktop Shortcut
@@ -127,6 +130,29 @@ class LyricsTrayIcon(QSystemTrayIcon):
         exit_action.triggered.connect(QGuiApplication.quit)
 
         self.setContextMenu(self.menu)
+
+    def _check_updates(self):
+        from .updater import UpdateCheckerThread, prompt_update_confirmation, launch_update_bat_and_exit
+        from . import __version__
+        self.showMessage("Transparent Live Lyrics", "Checking for updates...", QSystemTrayIcon.Information, 2000)
+        self._tray_upd_thread = UpdateCheckerThread(__version__, self)
+
+        def on_avail(ver, notes, url):
+            if prompt_update_confirmation(ver, notes):
+                app_ctrl = getattr(self.window, "app_controller", None)
+                shutdown_fn = app_ctrl.shutdown if app_ctrl else None
+                launch_update_bat_and_exit(shutdown_fn)
+
+        def on_none(ver):
+            self.showMessage("Transparent Live Lyrics", f"You are running the latest version ({ver}).", QSystemTrayIcon.Information, 3000)
+
+        def on_err(err):
+            self.showMessage("Transparent Live Lyrics", f"Update check failed: {err}", QSystemTrayIcon.Warning, 3000)
+
+        self._tray_upd_thread.update_available.connect(on_avail)
+        self._tray_upd_thread.no_update.connect(on_none)
+        self._tray_upd_thread.error.connect(on_err)
+        self._tray_upd_thread.start()
 
     def _create_desktop_shortcut(self):
         import subprocess

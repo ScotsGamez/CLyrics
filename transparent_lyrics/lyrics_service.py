@@ -3,6 +3,7 @@ import bisect
 import threading
 from typing import List, Tuple, Optional, Dict
 import syncedlyrics
+from .lrc_cache import LrcFileCache
 
 
 class LyricLine:
@@ -19,13 +20,15 @@ class LyricLine:
 class LyricsService:
     """Handles fetching, caching, parsing, and real-time synchronization of LRC lyrics."""
 
-    def __init__(self, prefer_uncensored: bool = True):
+    def __init__(self, prefer_uncensored: bool = True, file_cache: Optional[LrcFileCache] = None):
         self._cache: Dict[str, Optional[List[LyricLine]]] = {}
+        self._raw_cache: Dict[str, Optional[str]] = {}
         self._lock = threading.Lock()
         self._fetch_threads: Dict[str, threading.Thread] = {}
         self._last_matched_index: int = -1
         self._last_matched_track: str = ""
         self.prefer_uncensored: bool = prefer_uncensored
+        self.file_cache: LrcFileCache = file_cache if file_cache is not None else LrcFileCache()
 
     def set_prefer_uncensored(self, prefer: bool):
         """Updates uncensored lyrics preference and invalidates cache if changed."""
@@ -38,14 +41,42 @@ class LyricsService:
         with self._lock:
             if track_key:
                 self._cache.pop(track_key, None)
+                self._raw_cache.pop(track_key, None)
             else:
                 self._cache.clear()
+                self._raw_cache.clear()
 
     @staticmethod
     def _clean_track_id(title: str, artist: str) -> str:
         t = re.sub(r"[^\w\s]", "", title.lower()).strip()
         a = re.sub(r"[^\w\s]", "", artist.lower()).strip()
         return f"{t} - {a}"
+
+    def get_cached_lrc(self, title: str, artist: str) -> Optional[str]:
+        """Checks the 5-file rolling disk cache for a previously saved .lrc file."""
+        track_key = self._clean_track_id(title, artist)
+        return self.file_cache.get_lrc(track_key)
+
+    def save_previous_lrc(self, track_key: str, raw_lrc: str):
+        """Saves a finished previous track's raw LRC string to the 5-file rolling disk cache."""
+        if track_key and raw_lrc and raw_lrc.strip():
+            self.file_cache.save_lrc(track_key, raw_lrc)
+
+    def set_cached_lyrics(self, track_key: str, parsed: Optional[List[LyricLine]], raw_lrc: Optional[str] = None):
+        """Stores parsed lyrics and raw LRC text in memory."""
+        with self._lock:
+            self._cache[track_key] = parsed
+            if raw_lrc:
+                self._raw_cache[track_key] = raw_lrc
+
+    def get_raw_lrc(self, title: str, artist: str) -> Optional[str]:
+        track_key = self._clean_track_id(title, artist)
+        with self._lock:
+            return self._raw_cache.get(track_key)
+
+    def get_raw_lrc_by_key(self, track_key: str) -> Optional[str]:
+        with self._lock:
+            return self._raw_cache.get(track_key)
 
     def parse_lrc(self, lrc_text: str) -> List[LyricLine]:
         """Parses LRC format string into a sorted list of LyricLine objects."""
@@ -80,20 +111,33 @@ class LyricsService:
         return lines
 
     def fetch_lyrics_async(self, title: str, artist: str, callback=None):
-        """Fetches lyrics in a background worker thread."""
+        """Fetches lyrics asynchronously, checking memory and .lrc file cache before network search."""
         track_key = self._clean_track_id(title, artist)
 
         with self._lock:
-            if track_key in self._cache:
+            if track_key in self._cache and self._cache[track_key] is not None:
                 if callback:
                     callback(track_key, self._cache[track_key])
                 return
 
+        # Check rolling .lrc file cache first!
+        cached_lrc = self.file_cache.get_lrc(track_key)
+        if cached_lrc:
+            parsed = self.parse_lrc(cached_lrc)
+            with self._lock:
+                self._cache[track_key] = parsed
+                self._raw_cache[track_key] = cached_lrc
+            if callback:
+                callback(track_key, parsed)
+            return
+
+        with self._lock:
             if track_key in self._fetch_threads and self._fetch_threads[track_key].is_alive():
                 return
 
             def worker():
                 parsed = None
+                raw = None
                 try:
                     query = f"{title} {artist}".strip()
                     # LRCLIB provides community uncensored lyrics, while NetEase censors explicit words
@@ -114,6 +158,7 @@ class LyricsService:
 
                 with self._lock:
                     self._cache[track_key] = parsed
+                    self._raw_cache[track_key] = raw
 
                 if callback:
                     callback(track_key, parsed)
@@ -130,7 +175,9 @@ class LyricsService:
     def is_cached(self, title: str, artist: str) -> bool:
         track_key = self._clean_track_id(title, artist)
         with self._lock:
-            return track_key in self._cache
+            if track_key in self._cache and self._cache[track_key] is not None:
+                return True
+        return self.file_cache.has_lrc(track_key)
 
     def match_lyrics(
         self,

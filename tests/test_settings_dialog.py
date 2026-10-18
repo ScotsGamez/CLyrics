@@ -132,6 +132,30 @@ class TestSettingsDialog(unittest.TestCase):
         self.assertFalse(restart_called[0])
         self.assertEqual(applied_data, {})
 
+    def test_settings_dialog_contrast_and_update_toggles(self):
+        from transparent_lyrics.config import ConfigManager
+        from transparent_lyrics.settings_dialog import SettingsDialog
+
+        cfg = ConfigManager()
+        cfg.set("high_contrast_outline", False)
+        cfg.set("check_for_updates", False)
+
+        dialog = SettingsDialog(cfg)
+        self.assertFalse(dialog.contrast_check.isChecked())
+        self.assertFalse(dialog.update_check.isChecked())
+
+        dialog.contrast_check.setChecked(True)
+        dialog.update_check.setChecked(True)
+
+        restart_called = [False]
+        dialog.restart_requested.connect(lambda: restart_called.__setitem__(0, True))
+
+        dialog._save_and_apply()
+
+        self.assertTrue(restart_called[0])
+        self.assertTrue(cfg.get("high_contrast_outline"))
+        self.assertTrue(cfg.get("check_for_updates"))
+
         dialog.close()
 
 

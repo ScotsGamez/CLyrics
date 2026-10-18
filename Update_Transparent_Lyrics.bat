@@ -22,7 +22,10 @@ pip install -r requirements.txt
 echo.
 echo ========================================================
 echo   Update successfully completed!
-echo   Run Launch_Transparent_Lyrics.bat to start the app.
+echo   Relaunching Transparent Live Lyrics...
 echo ========================================================
 echo.
-pause
+
+timeout /t 1 /nobreak >nul
+call Launch_Transparent_Lyrics.bat
+exit /b 0

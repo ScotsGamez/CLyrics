@@ -19,11 +19,15 @@ DEFAULT_CONFIG: Dict[str, Any] = {
     "next_opacity": 0.50,       # Next upcoming lyric opacity (0.0 - 1.0)
     "prev_opacity": 0.25,       # Previous lyric opacity (0.0 - 1.0)
     "prefer_uncensored": True,  # Prioritize uncensored lyrics providers (LRCLIB)
+    "high_contrast_outline": False,  # Thick solid dark outline for maximum readability
+    "check_for_updates": False,      # Automatically check for updates on startup (off by default)
+    "first_run_update_notified": False,  # Whether user has been prompted on first run
 }
 
 # Primary local location (project root) and AppData fallback
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 APPDATA_DIR = Path(os.environ.get("APPDATA", ".")) / "TransparentLyrics"
+LRC_CACHE_DIR = APPDATA_DIR / "lrc_cache"
 
 
 def _parse_legacy_yaml(text: str) -> Dict[str, Any]:

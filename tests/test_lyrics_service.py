@@ -80,6 +80,30 @@ class TestLyricsService(unittest.TestCase):
         self.assertFalse(service.is_cached("Song", "Artist"))
         self.assertTrue(service.is_cached("Other", "Artist"))
 
+    def test_file_cache_lookup_avoids_network(self):
+        import tempfile
+        import shutil
+        from pathlib import Path
+        from transparent_lyrics.lrc_cache import LrcFileCache
+
+        temp_dir = tempfile.mkdtemp()
+        try:
+            fc = LrcFileCache(cache_dir=Path(temp_dir), max_size=5)
+            fc.save_lrc("cached song - cached artist", "[00:05.00] Line from cached LRC file")
+
+            service = LyricsService(file_cache=fc)
+
+            # fetch_lyrics_async should find it in fc and return parsed without any network call
+            result = []
+            service.fetch_lyrics_async("Cached Song", "Cached Artist", callback=lambda k, lines: result.append((k, lines)))
+
+            self.assertEqual(len(result), 1)
+            self.assertEqual(result[0][0], "cached song - cached artist")
+            self.assertEqual(len(result[0][1]), 1)
+            self.assertEqual(result[0][1][0].text, "Line from cached LRC file")
+        finally:
+            shutil.rmtree(temp_dir, ignore_errors=True)
+
 
 if __name__ == "__main__":
     unittest.main()

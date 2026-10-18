@@ -75,6 +75,16 @@ THEMES: Dict[str, LyricTheme] = {
         context_opacity=0.45,
         meta_opacity=0.70,
     ),
+    "Neon Contrast": LyricTheme(
+        name="Neon Contrast",
+        active_color="#39FF14",
+        context_color="#00E5FF",
+        meta_color="#FFFF00",
+        font_family="Segoe UI",
+        active_opacity=1.0,
+        context_opacity=0.60,
+        meta_opacity=0.85,
+    ),
 }
 
 

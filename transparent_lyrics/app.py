@@ -81,6 +81,7 @@ class TransparentLyricsApp(QObject):
 
         # Create overlay window
         self.window = OverlayWindow(self.config)
+        self.window.app_controller = self
         self.window.uncensored_changed.connect(self.on_uncensored_changed)
         self.window.restart_requested.connect(self.restart_application)
 
@@ -93,6 +94,7 @@ class TransparentLyricsApp(QObject):
 
         # Current track tracking
         self.current_track_key = ""
+        self.current_raw_lrc: Optional[str] = None
         self.last_title = ""
         self.last_artist = ""
         self.last_playing = False
@@ -111,6 +113,31 @@ class TransparentLyricsApp(QObject):
         # Display window
         self.window.show()
 
+        # Check first run notification or scheduled auto-update check
+        QTimer.singleShot(1500, self._check_first_run_or_auto_update)
+
+    def _check_first_run_or_auto_update(self):
+        from .updater import (
+            prompt_first_run_update_check,
+            UpdateCheckerThread,
+            prompt_update_confirmation,
+            launch_update_bat_and_exit
+        )
+        from . import __version__
+
+        if not self.config.get("first_run_update_notified", False):
+            prompt_first_run_update_check(self.config, self.window)
+
+        if self.config.get("check_for_updates", False):
+            self._auto_upd_thread = UpdateCheckerThread(__version__, self)
+
+            def on_avail(ver, notes, url):
+                if prompt_update_confirmation(ver, notes, self.window):
+                    launch_update_bat_and_exit(self.shutdown)
+
+            self._auto_upd_thread.update_available.connect(on_avail)
+            self._auto_upd_thread.start()
+
     @Slot(str, str, bool, float, float)
     def on_media_changed(self, title: str, artist: str, is_playing: bool, pos: float, duration: float):
         self.last_title = title
@@ -120,7 +147,10 @@ class TransparentLyricsApp(QObject):
 
         if not title:
             # Idle State
+            if self.current_track_key and self.current_raw_lrc:
+                self.lyrics_service.save_previous_lrc(self.current_track_key, self.current_raw_lrc)
             self.current_track_key = ""
+            self.current_raw_lrc = None
             self.tray.update_track_info("", "", False)
             self.window.renderer.set_artwork(None)
             self.window.renderer.update_lyrics_state(
@@ -138,7 +168,12 @@ class TransparentLyricsApp(QObject):
 
         # Track changed: Fetch lyrics and artwork asynchronously
         if track_key != self.current_track_key:
+            # 1. Archive finished previous track into the 5-file rolling .lrc cache
+            if self.current_track_key and self.current_raw_lrc:
+                self.lyrics_service.save_previous_lrc(self.current_track_key, self.current_raw_lrc)
+
             self.current_track_key = track_key
+            self.current_raw_lrc = None
 
             # Fetch Album Art
             cached_art = self.artwork_service.get_cached_artwork(title, artist)
@@ -148,8 +183,14 @@ class TransparentLyricsApp(QObject):
                 self.window.renderer.set_artwork(None)
                 self.artwork_service.fetch_artwork_async(title, artist)
 
-            # Fetch Lyrics
-            if not self.lyrics_service.is_cached(title, artist):
+            # Fetch Lyrics: Check 5-file .lrc cache first before calling fetch_lyrics_async
+            cached_lrc = self.lyrics_service.get_cached_lrc(title, artist)
+            if cached_lrc:
+                parsed = self.lyrics_service.parse_lrc(cached_lrc)
+                self.lyrics_service.set_cached_lyrics(track_key, parsed, raw_lrc=cached_lrc)
+                self.current_raw_lrc = cached_lrc
+                self._sync_lyrics_tick()
+            elif not self.lyrics_service.is_cached(title, artist):
                 self.window.renderer.update_lyrics_state(
                     state="LOADING",
                     title=title,
@@ -165,11 +206,14 @@ class TransparentLyricsApp(QObject):
                     callback=self.on_lyrics_fetched
                 )
                 return
+            else:
+                self.current_raw_lrc = self.lyrics_service.get_raw_lrc(title, artist)
 
         self._sync_lyrics_tick()
 
     def on_lyrics_fetched(self, track_key: str, parsed_lines):
         if track_key == self.current_track_key:
+            self.current_raw_lrc = self.lyrics_service.get_raw_lrc_by_key(track_key)
             self._sync_lyrics_tick()
 
     def on_uncensored_changed(self, prefer: bool):

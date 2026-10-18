@@ -364,6 +364,9 @@ class SettingsDialog(QDialog):
             self.theme_combo.addItem(theme_name, theme_name)
         t_form.addRow("Color Theme:", self.theme_combo)
 
+        self.contrast_check = QCheckBox("High-Contrast Outline (Solid dark border for bright backgrounds)")
+        t_form.addRow("Readability:", self.contrast_check)
+
         layout.addWidget(theme_group)
 
         typo_group = QGroupBox("Typography")
@@ -438,8 +441,55 @@ class SettingsDialog(QDialog):
         provider_layout.addWidget(uncensored_desc)
 
         layout.addWidget(provider_group)
+
+        updates_group = QGroupBox("Application Updates")
+        updates_layout = QVBoxLayout(updates_group)
+
+        self.update_check = QCheckBox("🔄 Check for Updates Automatically on Startup")
+        updates_layout.addWidget(self.update_check)
+
+        h_upd = QHBoxLayout()
+        self.manual_update_btn = QPushButton("Check for Updates Now")
+        self.manual_update_btn.clicked.connect(self._manual_check_update)
+        self.update_status_lbl = QLabel("")
+        self.update_status_lbl.setStyleSheet("color: #94a3b8; font-size: 12px;")
+        h_upd.addWidget(self.manual_update_btn)
+        h_upd.addWidget(self.update_status_lbl)
+        h_upd.addStretch()
+        updates_layout.addLayout(h_upd)
+
+        layout.addWidget(updates_group)
         layout.addStretch()
         self.tabs.addTab(tab, "⏱ Sync & Lyrics")
+
+    def _manual_check_update(self):
+        from .updater import UpdateCheckerThread, prompt_update_confirmation, launch_update_bat_and_exit
+        from . import __version__
+        self.update_status_lbl.setText("Checking GitHub for updates...")
+        self.manual_update_btn.setEnabled(False)
+
+        self._upd_thread = UpdateCheckerThread(__version__, self)
+
+        def on_avail(ver, notes, url):
+            self.update_status_lbl.setText(f"Update available: {ver}")
+            self.manual_update_btn.setEnabled(True)
+            if prompt_update_confirmation(ver, notes, self):
+                parent_app = getattr(self.parent(), "app_controller", None)
+                shutdown_fn = parent_app.shutdown if parent_app else None
+                launch_update_bat_and_exit(shutdown_fn)
+
+        def on_none(ver):
+            self.update_status_lbl.setText(f"You have the latest version ({ver}).")
+            self.manual_update_btn.setEnabled(True)
+
+        def on_err(err):
+            self.update_status_lbl.setText(f"Check failed: {err}")
+            self.manual_update_btn.setEnabled(True)
+
+        self._upd_thread.update_available.connect(on_avail)
+        self._upd_thread.no_update.connect(on_none)
+        self._upd_thread.error.connect(on_err)
+        self._upd_thread.start()
 
     # -------------------------------------------------------------
     # Data Loading & Saving
@@ -480,6 +530,10 @@ class SettingsDialog(QDialog):
         self.sync_spin.setValue(float(self.config.get("sync_offset", 0.0)))
         self.uncensored_check.setChecked(bool(self.config.get("prefer_uncensored", True)))
 
+        # Readability & Updates
+        self.contrast_check.setChecked(bool(self.config.get("high_contrast_outline", False)))
+        self.update_check.setChecked(bool(self.config.get("check_for_updates", False)))
+
     def _reset_defaults(self):
         """Loads default values into GUI controls without saving yet."""
         self.active_slider.setValue(100)
@@ -490,11 +544,13 @@ class SettingsDialog(QDialog):
         self.album_combo.setCurrentIndex(0)
         self.lock_check.setChecked(False)
         self.theme_combo.setCurrentIndex(0)
+        self.contrast_check.setChecked(False)
         self.font_combo.setCurrentIndex(0)
         self.active_size_spin.setValue(22)
         self.context_size_spin.setValue(15)
         self.sync_spin.setValue(0.0)
         self.uncensored_check.setChecked(True)
+        self.update_check.setChecked(False)
 
     def _save_and_apply(self):
         """Collects GUI values, saves to ConfigManager, and either applies theme live or restarts app."""
@@ -507,11 +563,13 @@ class SettingsDialog(QDialog):
             "album_cover_mode": self.album_combo.currentData(),
             "is_locked": self.lock_check.isChecked(),
             "theme": self.theme_combo.currentData(),
+            "high_contrast_outline": self.contrast_check.isChecked(),
             "font_family": self.font_combo.currentData(),
             "active_font_size": self.active_size_spin.value(),
             "context_font_size": self.context_size_spin.value(),
             "sync_offset": round(self.sync_spin.value(), 2),
             "prefer_uncensored": self.uncensored_check.isChecked(),
+            "check_for_updates": self.update_check.isChecked(),
         }
 
         changed_keys = []
@@ -523,7 +581,7 @@ class SettingsDialog(QDialog):
             elif key in ("width", "height", "active_font_size", "context_font_size"):
                 if old_val is None or int(old_val) != int(new_val):
                     changed_keys.append(key)
-            elif key in ("is_locked", "prefer_uncensored"):
+            elif key in ("is_locked", "prefer_uncensored", "high_contrast_outline", "check_for_updates"):
                 if old_val is None or bool(old_val) != bool(new_val):
                     changed_keys.append(key)
             else:

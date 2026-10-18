@@ -42,6 +42,9 @@ class LyricsRenderer(QWidget):
         self.next_opacity: float = 0.50
         self.prev_opacity: float = 0.25
 
+        # High-Contrast text outline option (Issue #4)
+        self.high_contrast_outline: bool = False
+
         # Timers & animations
         self._track_change_time: float = 0.0
         self._no_lyrics_time: float = 0.0
@@ -62,6 +65,11 @@ class LyricsRenderer(QWidget):
         self.active_opacity = max(0.0, min(1.0, active))
         self.next_opacity = max(0.0, min(1.0, next_op))
         self.prev_opacity = max(0.0, min(1.0, prev_op))
+        self.update()
+
+    def set_high_contrast_outline(self, enabled: bool):
+        """Enables or disables thick solid black outline around text glyphs for maximum readability."""
+        self.high_contrast_outline = enabled
         self.update()
 
     def set_album_cover_mode(self, mode: str):
@@ -218,11 +226,31 @@ class LyricsRenderer(QWidget):
         draw_color = QColor(color)
         final_alpha = max(0.0, min(1.0, alpha_multiplier * self._global_fade_alpha))
         draw_color.setAlphaF(final_alpha)
-        painter.setFont(draw_font)
-        painter.setPen(draw_color)
 
-        rect = QRectF(x_center - max_width / 2.0, y_center - 24, max_width, 48)
-        painter.drawText(rect, Qt.AlignCenter | Qt.AlignVCenter, draw_text)
+        if getattr(self, "high_contrast_outline", False):
+            # High-Contrast outline rendering using QPainterPath (Issue #4)
+            text_w_adv = fm.horizontalAdvance(draw_text)
+            tx = x_center - text_w_adv / 2.0
+            ty = y_center + (fm.ascent() - fm.descent()) / 2.0
+
+            path = QPainterPath()
+            path.addText(tx, ty, draw_font, draw_text)
+
+            painter.save()
+            outline_pen = QPen(QColor(0, 0, 0, int(245 * final_alpha)), 4.0)
+            outline_pen.setJoinStyle(Qt.RoundJoin)
+            outline_pen.setCapStyle(Qt.RoundCap)
+            painter.setPen(outline_pen)
+            painter.setBrush(Qt.NoBrush)
+            painter.drawPath(path)
+
+            painter.fillPath(path, draw_color)
+            painter.restore()
+        else:
+            painter.setFont(draw_font)
+            painter.setPen(draw_color)
+            rect = QRectF(x_center - max_width / 2.0, y_center - 24, max_width, 48)
+            painter.drawText(rect, Qt.AlignCenter | Qt.AlignVCenter, draw_text)
 
     def paintEvent(self, event):
         painter = QPainter(self)
@@ -318,7 +346,21 @@ class LyricsRenderer(QWidget):
             painter.setPen(b_color)
             fm_meta = QFontMetrics(font_meta)
             elided_banner = fm_meta.elidedText(banner_text, Qt.ElideRight, int(text_w))
-            painter.drawText(banner_rect, Qt.AlignCenter, elided_banner)
+
+            if getattr(self, "high_contrast_outline", False):
+                bx = text_center_x - fm_meta.horizontalAdvance(elided_banner) / 2.0
+                by = 8 + (24 + fm_meta.ascent() - fm_meta.descent()) / 2.0
+                b_path = QPainterPath()
+                b_path.addText(bx, by, font_meta, elided_banner)
+                b_pen = QPen(QColor(0, 0, 0, int(220 * b_color.alphaF())), 2.5)
+                b_pen.setJoinStyle(Qt.RoundJoin)
+                b_pen.setCapStyle(Qt.RoundCap)
+                painter.strokePath(b_path, b_pen)
+                painter.fillPath(b_path, b_color)
+            else:
+                painter.setFont(font_meta)
+                painter.setPen(b_color)
+                painter.drawText(banner_rect, Qt.AlignCenter, elided_banner)
 
         # 3. Render Continuous 3-Line Scrolling Lyrics with 3-Tier Opacity
         if self.state in ("LYRICS", "INSTRUMENTAL") and self.lyrics and self._current_index >= 0:
