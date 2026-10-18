@@ -3,7 +3,7 @@ title Transparent Live Lyrics Overlay
 cd /d "%~dp0"
 
 :: Auto-create Desktop Shortcut on first run if it doesn't exist
-if not exist "%USERPROFILE%\Desktop\Transparent Live Lyrics.lnk" (
+if not exist "%USERPROFILE%\Desktop\Clyrics.lnk" (
     powershell -ExecutionPolicy Bypass -NoProfile -File "scripts\create_shortcut.ps1" >nul 2>nul
 )
 

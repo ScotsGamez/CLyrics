@@ -1,12 +1,34 @@
 # create_shortcut.ps1
-# Creates a high-DPI desktop shortcut for Transparent Live Lyrics Overlay
+# Creates a high-DPI desktop shortcut matching the repository name for Clyrics
 param(
-    [string]$TargetDir = (Split-Path -Parent $PSScriptRoot)
+    [string]$TargetDir = (Split-Path -Parent $PSScriptRoot),
+    [string]$ShortcutName = ""
 )
+
+if (-not $ShortcutName) {
+    try {
+        $remote = git -C $TargetDir config --get remote.origin.url 2>$null
+        if ($remote) {
+            $ShortcutName = [System.IO.Path]::GetFileNameWithoutExtension($remote.TrimEnd('/'))
+        }
+    } catch {}
+}
+if (-not $ShortcutName) {
+    $ShortcutName = "Clyrics"
+}
 
 $WshShell = New-Object -ComObject WScript.Shell
 $Desktop = [System.Environment]::GetFolderPath('Desktop')
-$ShortcutPath = Join-Path $Desktop "Transparent Live Lyrics.lnk"
+$ShortcutPath = Join-Path $Desktop "$ShortcutName.lnk"
+
+# Clean up any legacy differently named shortcuts
+$LegacyNames = @("Transparent Live Lyrics.lnk", "Transparent Lyrics.lnk")
+foreach ($legacy in $LegacyNames) {
+    $legacyPath = Join-Path $Desktop $legacy
+    if ((Test-Path $legacyPath) -and ($legacyPath -ne $ShortcutPath)) {
+        Remove-Item $legacyPath -Force -ErrorAction SilentlyContinue
+    }
+}
 
 # Find pythonw (silent, no terminal window) or fallback to python
 $py = (Get-Command pythonw.exe -ErrorAction SilentlyContinue).Source
@@ -26,7 +48,7 @@ $IconPath = Join-Path $TargetDir "assets\icon.ico"
 if (Test-Path $IconPath) {
     $Shortcut.IconLocation = "$IconPath, 0"
 }
-$Shortcut.Description = "100% Transparent Live Lyrics Overlay"
+$Shortcut.Description = "$ShortcutName - 100% Transparent Live Lyrics Overlay"
 $Shortcut.Save()
 
 Write-Host "Created desktop shortcut at: $ShortcutPath" -ForegroundColor Green

@@ -20,6 +20,72 @@ def parse_version(v_str: str) -> Tuple[int, ...]:
     return tuple(int(n) for n in nums) if nums else (0,)
 
 
+def get_current_repo_name() -> str:
+    """Retrieves current repository name from git remote or defaults to 'Clyrics'."""
+    try:
+        out = subprocess.check_output(
+            ["git", "config", "--get", "remote.origin.url"],
+            cwd=str(PROJECT_ROOT),
+            text=True,
+            stderr=subprocess.DEVNULL,
+        ).strip()
+        name = out.rstrip("/").split("/")[-1]
+        if name.endswith(".git"):
+            name = name[:-4]
+        if name:
+            return name
+    except Exception:
+        pass
+    return "Clyrics"
+
+
+def check_and_update_desktop_shortcut() -> bool:
+    """
+    Checks if the desktop shortcut matches the repository name (e.g. Clyrics.lnk).
+    If outdated or missing, removes legacy shortcuts and creates/updates the correct shortcut.
+    """
+    repo_name = get_current_repo_name()
+    desktop = Path(os.environ.get("USERPROFILE", "")) / "Desktop"
+    if not desktop.exists():
+        desktop = Path(os.path.expanduser("~/Desktop"))
+
+    expected_shortcut = desktop / f"{repo_name}.lnk"
+
+    # Known legacy shortcut names to clean up
+    legacy_shortcuts = [
+        desktop / "Transparent Live Lyrics.lnk",
+        desktop / "Transparent Lyrics.lnk",
+    ]
+
+    needs_update = not expected_shortcut.exists()
+
+    for leg in legacy_shortcuts:
+        if leg.exists() and leg != expected_shortcut:
+            try:
+                leg.unlink()
+                needs_update = True
+            except Exception as e:
+                print(f"[Updater] Error removing legacy shortcut {leg}: {e}")
+
+    if needs_update and sys.platform == "win32":
+        script = PROJECT_ROOT / "scripts" / "create_shortcut.ps1"
+        if script.exists():
+            try:
+                cmd = [
+                    "powershell.exe",
+                    "-ExecutionPolicy", "Bypass",
+                    "-NoProfile",
+                    "-File", str(script),
+                    "-TargetDir", str(PROJECT_ROOT),
+                    "-ShortcutName", repo_name,
+                ]
+                subprocess.run(cmd, check=True, timeout=10)
+                return True
+            except Exception as e:
+                print(f"[Updater] Error updating desktop shortcut: {e}")
+    return False
+
+
 class UpdateCheckerThread(QThread):
     update_available = Signal(str, str, str)  # remote_version, release_notes, html_url
     no_update = Signal(str)                   # current_version
@@ -30,10 +96,16 @@ class UpdateCheckerThread(QThread):
         self.current_version = current_version
 
     def run(self):
+        # Verify and ensure desktop shortcut name matches repo name
+        try:
+            check_and_update_desktop_shortcut()
+        except Exception as e:
+            print(f"[Updater] Error checking shortcut name: {e}")
+
         try:
             req = urllib.request.Request(
                 GITHUB_API_LATEST_RELEASE,
-                headers={"User-Agent": "TransparentLyrics-App"}
+                headers={"User-Agent": "Clyrics-App"}
             )
             with urllib.request.urlopen(req, timeout=5) as resp:
                 data = json.loads(resp.read().decode("utf-8"))

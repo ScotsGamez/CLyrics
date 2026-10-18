@@ -54,6 +54,25 @@ class TestUpdater(unittest.TestCase):
             mock_popen.assert_called_once()
             mock_quit.assert_called_once()
 
+    def test_get_current_repo_name(self):
+        from transparent_lyrics.updater import get_current_repo_name
+        name = get_current_repo_name()
+        self.assertEqual(name, "Clyrics")
+
+    def test_check_and_update_desktop_shortcut(self):
+        import tempfile
+        from pathlib import Path
+        from transparent_lyrics.updater import check_and_update_desktop_shortcut
+
+        with tempfile.TemporaryDirectory() as tmp_desktop:
+            with patch.dict("os.environ", {"USERPROFILE": tmp_desktop}):
+                with patch("transparent_lyrics.updater.get_current_repo_name", return_value="Clyrics"):
+                    with patch("subprocess.run") as mock_run:
+                        # Should detect missing Clyrics.lnk and trigger create_shortcut.ps1
+                        updated = check_and_update_desktop_shortcut()
+                        self.assertTrue(updated)
+                        mock_run.assert_called_once()
+
 
 if __name__ == "__main__":
     unittest.main()
