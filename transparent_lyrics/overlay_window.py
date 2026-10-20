@@ -383,10 +383,8 @@ class OverlayWindow(QWidget):
         menu.exec(event.globalPos())
 
     def _create_desktop_shortcut(self):
-        import subprocess
-        from pathlib import Path
-        script = Path(__file__).resolve().parent.parent / "scripts" / "create_shortcut.ps1"
+        from .updater import check_and_update_desktop_shortcut
         try:
-            subprocess.run(["powershell.exe", "-ExecutionPolicy", "Bypass", "-NoProfile", "-File", str(script)], check=True)
+            check_and_update_desktop_shortcut(force=True)
         except Exception as e:
             print(f"[OverlayWindow] Error creating shortcut: {e}")

@@ -26,7 +26,7 @@ DEFAULT_CONFIG: Dict[str, Any] = {
 
 # Primary local location (project root) and AppData fallback
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
-APPDATA_DIR = Path(os.environ.get("APPDATA", ".")) / "TransparentLyrics"
+APPDATA_DIR = Path(os.environ.get("APPDATA", ".")) / "CLyrics"
 LRC_CACHE_DIR = APPDATA_DIR / "lrc_cache"
 
 
@@ -93,6 +93,7 @@ class ConfigManager:
     def load(self):
         """Loads configuration from settings.json and automatically migrates legacy settings if present."""
         loaded_from_json = False
+        migrated = False
 
         # 1. Primary: load existing settings.json
         for file_path in [self.local_json, self.appdata_json]:
@@ -107,8 +108,21 @@ class ConfigManager:
                 except Exception as e:
                     print(f"[ConfigManager] Could not load from {file_path}: {e}")
 
+        # 1b. Check legacy %APPDATA%/TransparentLyrics/settings.json if new AppData does not exist
+        if not loaded_from_json and not os.environ.get("TRANSPARENT_LYRICS_TEST_DIR"):
+            legacy_appdata_tl = Path(os.environ.get("APPDATA", ".")) / "TransparentLyrics" / "settings.json"
+            if legacy_appdata_tl.exists():
+                try:
+                    content = legacy_appdata_tl.read_text(encoding="utf-8")
+                    loaded = json.loads(content)
+                    if isinstance(loaded, dict):
+                        self.config.update(loaded)
+                        loaded_from_json = True
+                        migrated = True
+                except Exception as e:
+                    print(f"[ConfigManager] Could not load legacy AppData settings: {e}")
+
         # 2. Backwards-compatibility: Check and migrate legacy YAML or config.json
-        migrated = False
         legacy_sources = [
             (self.legacy_local_yaml, True),
             (self.legacy_appdata_yaml, True),
@@ -150,7 +164,7 @@ class ConfigManager:
         except Exception:
             pass
 
-        # 2. %APPDATA%\TransparentLyrics (persistent backup)
+        # 2. %APPDATA%\CLyrics (persistent backup)
         try:
             self.appdata_dir.mkdir(parents=True, exist_ok=True)
             self.appdata_json.write_text(json_content, encoding="utf-8")

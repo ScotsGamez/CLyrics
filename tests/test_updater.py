@@ -64,14 +64,23 @@ class TestUpdater(unittest.TestCase):
         from pathlib import Path
         from transparent_lyrics.updater import check_and_update_desktop_shortcut
 
-        with tempfile.TemporaryDirectory() as tmp_desktop:
-            with patch.dict("os.environ", {"USERPROFILE": tmp_desktop}):
+        with tempfile.TemporaryDirectory() as tmp_user:
+            tmp_desktop = Path(tmp_user) / "Desktop"
+            tmp_desktop.mkdir()
+            with patch.dict("os.environ", {"USERPROFILE": tmp_user}):
                 with patch("transparent_lyrics.updater.get_current_repo_name", return_value="CLyrics"):
                     with patch("subprocess.run") as mock_run:
-                        # Should detect missing CLyrics.lnk and trigger create_shortcut.ps1
+                        # 1. Missing CLyrics.lnk triggers headless create_shortcut.ps1
                         updated = check_and_update_desktop_shortcut()
                         self.assertTrue(updated)
                         mock_run.assert_called_once()
+
+                        # 2. When shortcut already exists and no legacy shortcuts, returns False without calling subprocess
+                        (tmp_desktop / "CLyrics.lnk").touch()
+                        mock_run.reset_mock()
+                        updated_again = check_and_update_desktop_shortcut()
+                        self.assertFalse(updated_again)
+                        mock_run.assert_not_called()
 
 
 if __name__ == "__main__":

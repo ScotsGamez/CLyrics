@@ -170,11 +170,9 @@ class LyricsTrayIcon(QSystemTrayIcon):
         self._tray_upd_thread.start()
 
     def _create_desktop_shortcut(self):
-        import subprocess
-        from pathlib import Path
-        script = Path(__file__).resolve().parent.parent / "scripts" / "create_shortcut.ps1"
+        from .updater import check_and_update_desktop_shortcut
         try:
-            subprocess.run(["powershell.exe", "-ExecutionPolicy", "Bypass", "-NoProfile", "-File", str(script)], check=True)
+            check_and_update_desktop_shortcut(force=True)
             self.showMessage("CLyrics", "Desktop shortcut created successfully!", QSystemTrayIcon.Information, 3000)
         except Exception as e:
             print(f"[Tray] Error creating shortcut: {e}")

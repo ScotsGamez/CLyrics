@@ -11,6 +11,7 @@ from PySide6.QtWidgets import QMessageBox, QApplication
 from .config import PROJECT_ROOT
 
 GITHUB_API_LATEST_RELEASE = "https://api.github.com/repos/ScotsGamez/Clyrics/releases/latest"
+_CACHED_REPO_NAME: Optional[str] = None
 
 
 def parse_version(v_str: str) -> Tuple[int, ...]:
@@ -22,28 +23,42 @@ def parse_version(v_str: str) -> Tuple[int, ...]:
 
 def get_current_repo_name() -> str:
     """Retrieves current repository name from git remote or defaults to 'CLyrics'."""
+    global _CACHED_REPO_NAME
+    if _CACHED_REPO_NAME:
+        return _CACHED_REPO_NAME
+
     try:
+        startupinfo = subprocess.STARTUPINFO() if sys.platform == "win32" else None
+        if startupinfo:
+            startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+            startupinfo.wShowWindow = 0
+        creationflags = getattr(subprocess, "CREATE_NO_WINDOW", 0x08000000) if sys.platform == "win32" else 0
+
         out = subprocess.check_output(
             ["git", "config", "--get", "remote.origin.url"],
             cwd=str(PROJECT_ROOT),
             text=True,
             stderr=subprocess.DEVNULL,
+            startupinfo=startupinfo,
+            creationflags=creationflags,
         ).strip()
         name = out.rstrip("/").split("/")[-1]
         if name.endswith(".git"):
             name = name[:-4]
         if name:
-            return "CLyrics" if name.lower() == "clyrics" else name
+            _CACHED_REPO_NAME = "CLyrics" if name.lower() == "clyrics" else name
+            return _CACHED_REPO_NAME
     except Exception:
         pass
-    return "CLyrics"
+    _CACHED_REPO_NAME = "CLyrics"
+    return _CACHED_REPO_NAME
 
 
 def check_and_update_desktop_shortcut(force: bool = False) -> bool:
     """
     Checks if the desktop shortcut matches the repository name (e.g. CLyrics.lnk)
     and ensures it is up to date with the latest icon and executable paths.
-    Removes legacy shortcuts and refreshes the shortcut.
+    Removes legacy shortcuts and refreshes the shortcut headlessly.
     """
     repo_name = get_current_repo_name()
     desktop = Path(os.environ.get("USERPROFILE", "")) / "Desktop"
@@ -56,29 +71,51 @@ def check_and_update_desktop_shortcut(force: bool = False) -> bool:
     legacy_shortcuts = [
         desktop / "Transparent Live Lyrics.lnk",
         desktop / "Transparent Lyrics.lnk",
-        desktop / "Clyrics.lnk",
     ]
+    if repo_name.lower() != "clyrics":
+        legacy_shortcuts.append(desktop / "Clyrics.lnk")
 
+    legacy_removed = False
     for leg in legacy_shortcuts:
-        if leg.exists() and leg != expected_shortcut:
+        if leg.exists() and leg.name.lower() != expected_shortcut.name.lower():
             try:
                 leg.unlink()
+                legacy_removed = True
             except Exception as e:
                 print(f"[Updater] Error removing legacy shortcut {leg}: {e}")
+
+    # If shortcut already exists, matches repo name, no legacy cleanup needed, and not forced,
+    # skip invoking PowerShell entirely for instantaneous 0ms headless startup.
+    if expected_shortcut.exists() and not legacy_removed and not force:
+        return False
 
     if sys.platform == "win32":
         script = PROJECT_ROOT / "scripts" / "create_shortcut.ps1"
         if script.exists():
             try:
+                startupinfo = subprocess.STARTUPINFO()
+                startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+                startupinfo.wShowWindow = 0
+                creationflags = getattr(subprocess, "CREATE_NO_WINDOW", 0x08000000)
                 cmd = [
                     "powershell.exe",
                     "-ExecutionPolicy", "Bypass",
                     "-NoProfile",
+                    "-NonInteractive",
+                    "-WindowStyle", "Hidden",
                     "-File", str(script),
                     "-TargetDir", str(PROJECT_ROOT),
                     "-ShortcutName", repo_name,
                 ]
-                subprocess.run(cmd, check=True, timeout=10)
+                subprocess.run(
+                    cmd,
+                    check=True,
+                    timeout=10,
+                    startupinfo=startupinfo,
+                    creationflags=creationflags,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                )
                 return True
             except Exception as e:
                 print(f"[Updater] Error updating desktop shortcut: {e}")

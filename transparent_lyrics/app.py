@@ -273,11 +273,9 @@ class TransparentLyricsApp(QObject):
             self.tray.hide()
         if hasattr(self, "window") and self.window:
             self.window.close()
-        from .media_service import kill_orphaned_media_readers
-        kill_orphaned_media_readers()
 
     def restart_application(self):
-        """Cleanly shuts down running services and restarts the application process."""
+        """Cleanly shuts down running services and restarts the application process headlessly."""
         self.shutdown()
         python = sys.executable
         script = str(PROJECT_ROOT / "run.py")
@@ -286,7 +284,14 @@ class TransparentLyricsApp(QObject):
 
         kwargs = {}
         if sys.platform == "win32":
-            kwargs["creationflags"] = getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0x00000200)
+            startupinfo = subprocess.STARTUPINFO()
+            startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+            startupinfo.wShowWindow = 0
+            kwargs["startupinfo"] = startupinfo
+            kwargs["creationflags"] = (
+                getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0x00000200)
+                | getattr(subprocess, "CREATE_NO_WINDOW", 0x08000000)
+            )
 
         subprocess.Popen([python, script], cwd=str(PROJECT_ROOT), **kwargs)
         QApplication.quit()

@@ -2,7 +2,6 @@ import os
 import sys
 import json
 import time
-import atexit
 import subprocess
 from pathlib import Path
 from PySide6.QtCore import QThread, Signal
@@ -78,25 +77,34 @@ def _get_or_create_kill_on_close_job():
 
 
 def kill_orphaned_media_readers():
-    """Finds and forcefully terminates any orphaned media_reader.ps1 background processes."""
+    """Finds and forcefully terminates any orphaned media_reader.ps1 background processes headlessly."""
     if sys.platform != "win32" or os.environ.get("TRANSPARENT_LYRICS_TEST_DIR"):
         return
     try:
+        startupinfo = subprocess.STARTUPINFO()
+        startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+        startupinfo.wShowWindow = 0  # SW_HIDE
+        creationflags = getattr(subprocess, "CREATE_NO_WINDOW", 0x08000000)
+
         cmd = [
             "powershell.exe",
             "-ExecutionPolicy", "Bypass",
             "-NoProfile",
             "-NonInteractive",
+            "-WindowStyle", "Hidden",
             "-Command",
             "Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -like '*media_reader.ps1*' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force }"
         ]
-        subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=4)
+        subprocess.run(
+            cmd,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            timeout=3,
+            startupinfo=startupinfo,
+            creationflags=creationflags,
+        )
     except Exception:
         pass
-
-
-# Register sweeper on interpreter exit
-atexit.register(kill_orphaned_media_readers)
 
 
 class MediaService(QThread):
@@ -116,9 +124,6 @@ class MediaService(QThread):
         else:
             base_dir = Path(__file__).resolve().parent.parent
             self.script_path = str(base_dir / "scripts" / "media_reader.ps1")
-
-        # Clean any stale/orphaned reader processes on initialization
-        kill_orphaned_media_readers()
 
     def run(self):
         while self.running:
@@ -142,6 +147,7 @@ class MediaService(QThread):
                     "-ExecutionPolicy", "Bypass",
                     "-NoProfile",
                     "-NonInteractive",
+                    "-WindowStyle", "Hidden",
                     "-File", self.script_path,
                     "-ParentPid", str(os.getpid()),
                 ]
@@ -202,6 +208,7 @@ class MediaService(QThread):
                 time.sleep(1.0)
 
     def _terminate_process(self):
+        """Immediately and headlessly terminates the worker process."""
         proc = self.process
         self.process = None
         if proc:
@@ -211,33 +218,42 @@ class MediaService(QThread):
                     proc.stdout.close()
             except Exception:
                 pass
+
+            # Fast native Win32 termination (0ms, completely silent, no console window)
             try:
                 proc.terminate()
-                proc.wait(timeout=0.3)
             except Exception:
                 pass
-            if proc.poll() is None:
-                if sys.platform == "win32":
-                    try:
-                        subprocess.run(
-                            ["taskkill", "/F", "/T", "/PID", str(pid)],
-                            stdout=subprocess.DEVNULL,
-                            stderr=subprocess.DEVNULL,
-                            timeout=2,
-                        )
-                    except Exception:
-                        try:
-                            proc.kill()
-                        except Exception:
-                            pass
-                else:
-                    try:
-                        proc.kill()
-                    except Exception:
-                        pass
+            try:
+                proc.kill()
+            except Exception:
+                pass
+
+            try:
+                proc.wait(timeout=0.1)
+            except Exception:
+                pass
+
+            # Fallback if process still hasn't exited: headless taskkill
+            if proc.poll() is None and sys.platform == "win32":
+                try:
+                    startupinfo = subprocess.STARTUPINFO()
+                    startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+                    startupinfo.wShowWindow = 0
+                    creationflags = getattr(subprocess, "CREATE_NO_WINDOW", 0x08000000)
+                    subprocess.run(
+                        ["taskkill", "/F", "/T", "/PID", str(pid)],
+                        stdout=subprocess.DEVNULL,
+                        stderr=subprocess.DEVNULL,
+                        timeout=1,
+                        startupinfo=startupinfo,
+                        creationflags=creationflags,
+                    )
+                except Exception:
+                    pass
 
     def stop(self):
+        """Cleanly and instantly stops the media service worker."""
         self.running = False
         self._terminate_process()
-        self.wait(1500)
-        kill_orphaned_media_readers()
+        self.wait(200)

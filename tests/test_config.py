@@ -2,6 +2,7 @@ import os
 import json
 import tempfile
 import unittest
+from unittest.mock import patch
 from pathlib import Path
 from transparent_lyrics.config import (
     ConfigManager,
@@ -92,6 +93,26 @@ class TestConfig(unittest.TestCase):
             saved_json = json.loads(cfg.local_json.read_text(encoding="utf-8"))
             self.assertEqual(saved_json.get("theme"), "Emerald")
             self.assertEqual(saved_json.get("width"), 1200)
+
+    def test_legacy_appdata_transparent_lyrics_migration(self):
+        with tempfile.TemporaryDirectory() as tmp_appdata_parent:
+            parent_path = Path(tmp_appdata_parent)
+            legacy_dir = parent_path / "TransparentLyrics"
+            legacy_dir.mkdir()
+            (legacy_dir / "settings.json").write_text(
+                json.dumps({"theme": "Sunset", "sync_offset": -1.5}),
+                encoding="utf-8"
+            )
+
+            with patch.dict(os.environ, {"APPDATA": str(parent_path)}):
+                # Clear test dir override so it exercises real AppData resolution
+                with patch.dict(os.environ, {"TRANSPARENT_LYRICS_TEST_DIR": ""}):
+                    with tempfile.TemporaryDirectory() as empty_root:
+                        cfg = ConfigManager(root_dir=Path(empty_root), appdata_dir=parent_path / "CLyrics")
+                        self.assertEqual(cfg.get("theme"), "Sunset")
+                        self.assertAlmostEqual(cfg.get("sync_offset"), -1.5)
+                        # Ensure it was saved to the new CLyrics AppData dir
+                        self.assertTrue((parent_path / "CLyrics" / "settings.json").exists())
 
 
 if __name__ == "__main__":
